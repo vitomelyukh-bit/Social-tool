@@ -420,8 +420,11 @@ def new_post(key, message, kind=None, media_url=None, fb=True, ig=True, schedule
 def instagram_account(page_id):
     ig = call("GET", page_id, fields="instagram_business_account{id,username}").get("instagram_business_account")
     if not ig:
-        raise MetaError("Questa pagina Facebook non ha un account Instagram professionale collegato.",
-                        "Collega l'account Instagram alla pagina da Meta Business Suite.")
+        raise MetaError("Non trovo un account Instagram professionale collegato a questa pagina Facebook.",
+                        "Controlla due cose: 1) l'account Instagram e' professionale e collegato alla pagina "
+                        "(Meta Business Suite > Impostazioni > Account Instagram); 2) l'utente di sistema del "
+                        "token ha accesso all'account Instagram in Business Manager, con i permessi "
+                        "instagram_basic e instagram_content_publish.")
     return ig
 
 
