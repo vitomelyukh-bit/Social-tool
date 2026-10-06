@@ -11,3 +11,6 @@ data/
 .env*.local
 .vercel
 .env*
+.agents/
+.claude/
+skills-lock.json
