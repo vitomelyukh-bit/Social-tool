@@ -1,18 +1,19 @@
 {% extends "base.html" %}
 {% block content %}
-<form method="post" enctype="multipart/form-data" class="card" id="f">
+<form method="post" class="card" id="f">
   <h1>Nuova campagna lead</h1>
   <p class="muted">Crea campagna, gruppo di inserzioni, modulo contatti (nome, telefono, email) e inserzione video. <strong>Tutto viene creato in PAUSA</strong>: lo attivi tu da Gestione inserzioni dopo averlo controllato.</p>
   {% if not clients %}<div class="avviso">Prima aggiungi un cliente.</div>{% else %}
   <label for="cliente">Cliente</label>
-  <select id="cliente" name="cliente" onchange="document.getElementById('azione').value='cambia'; this.form.submit()">
+  <select id="cliente" name="cliente" onchange="document.getElementById('azione').value='cambia'; this.form.dataset.skip='1'; this.form.submit()">
     {% for k, c in clients.items() %}<option value="{{ k }}" {{ 'selected' if k == key }}>{{ c.name }}</option>{% endfor %}
   </select>
   {% if not client.get('dsa_beneficiary') %}<div class="avviso" style="margin-top:12px">Per questo cliente manca il <strong>beneficiario DSA</strong>: in UE Meta lo richiede. <a href="{{ url_for('client_edit', key=key) }}">Compilalo nella scheda cliente</a>.</div>{% endif %}
 
   <h2 style="margin-top:24px">Video</h2>
   <label for="video_file">Carica dal computer</label>
-  <input type="file" id="video_file" name="video_file" accept="video/*">
+  {% if blob_enabled %}<input type="file" id="video_file" accept="video/mp4,video/quicktime">
+  {% else %}<div class="aiuto">Caricamento dal computer non disponibile: manca l'archivio file (Vercel Blob).</div>{% endif %}
   <label for="video_url">oppure link diretto al video <span class="aiuto">(usato solo se non carichi un file)</span></label>
   <input type="url" id="video_url" name="video_url" value="{{ form.video_url or '' }}" placeholder="https://.../video.mp4">
 
@@ -32,14 +33,12 @@
   <div class="aiuto">Coordinate: su Google Maps fai clic destro sul punto e copia i due numeri.</div>
 
   <input type="hidden" name="azione" id="azione" value="crea">
-  <div class="azioni"><button type="submit" id="go">Crea campagna in pausa</button><span class="muted" id="wait" style="display:none">Caricamento del video in corso, non chiudere la pagina...</span></div>
+  <div class="azioni"><button type="submit" id="go">Crea campagna in pausa</button><span class="muted" id="wait" style="display:none"></span></div>
+  <progress id="bar" max="1" value="0" style="display:none"></progress>
   {% endif %}
 </form>
-<script>
-document.getElementById('f').addEventListener('submit', function () {
-  if (document.getElementById('azione').value === 'crea') {
-    document.getElementById('go').disabled = true; document.getElementById('wait').style.display = 'inline';
-  }
-});
-</script>
+{% if clients %}<script>
+document.getElementById("cliente").addEventListener("change", function () { document.getElementById("f").dataset.skip = "1"; });
+wireUpload("f", "video_file", "video_url", function () { return "video"; });
+</script>{% endif %}
 {% endblock %}

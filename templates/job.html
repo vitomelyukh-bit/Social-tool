@@ -1,19 +1,38 @@
 {% extends "base.html" %}
-{% block title %}{{ 'Completato' if job.done else 'In corso...' }} - Meta Tool{% endblock %}
 {% block content %}
-{% if not job.done %}<meta http-equiv="refresh" content="3">{% endif %}
 <div class="card">
   <h1>{{ 'Nuova campagna' if job.kind == 'campagna' else 'Pubblicazione post' }}</h1>
-  {% if not job.done %}<div class="avviso">In corso... la pagina si aggiorna da sola. Puo' richiedere qualche minuto se c'e' un video.</div>{% endif %}
-  {% if job.error %}<div class="errore"><strong>{{ job.error.message }}</strong>{% if job.error.detail %}<small>{{ job.error.detail }}</small>{% endif %}</div>{% endif %}
-  {% if job.done and not job.error %}<div class="ok"><strong>Fatto!</strong></div>{% endif %}
-  <ol>{% for line in job.log %}<li>{{ line }}</li>{% endfor %}</ol>
-  {% if job.result and job.result.ads_manager_url %}
-    <p><a class="btn" href="{{ job.result.ads_manager_url }}" target="_blank">Apri in Gestione inserzioni</a></p>
-    <p class="muted">Tutto e' in PAUSA. Controlla anteprima, modulo e budget, poi attiva da Gestione inserzioni.</p>
-  {% elif job.error and job.kind == 'campagna' %}
-    <p class="muted">Se qualche passaggio sopra e' riuscito, in Gestione inserzioni puo' esserci una campagna incompleta (in pausa): eliminala prima di riprovare.</p>
-  {% endif %}
-  <div class="azioni"><a class="btn sec" href="{{ url_for(job.kind == 'campagna' and 'campaign' or 'publish') }}">Torna al modulo</a></div>
+  <div id="stato"></div>
+  <ol id="log"></ol>
+  <div id="link"></div>
+  <div class="azioni"><a class="btn sec" href="{{ url_for('campaign' if job.kind == 'campagna' else 'publish') }}">Torna al modulo</a></div>
 </div>
+<script>
+const URL_AVANZA = "{{ url_for('job_advance', jid=job.id) }}", KIND = "{{ job.kind }}";
+function esc(t) { const d = document.createElement("div"); d.textContent = t || ""; return d.innerHTML; }
+function render(j) {
+  document.getElementById("log").innerHTML = (j.log || []).map(function (l) { return "<li>" + esc(l) + "</li>"; }).join("");
+  const st = document.getElementById("stato"), link = document.getElementById("link");
+  if (j.error) st.innerHTML = '<div class="errore"><strong>' + esc(j.error.message) + '</strong><small>' + esc(j.error.detail) + '</small></div>';
+  else if (j.done) st.innerHTML = '<div class="ok"><strong>Fatto!</strong></div>';
+  else st.innerHTML = '<div class="avviso">In corso... non chiudere questa pagina. Con un video può richiedere qualche minuto.</div>';
+  let h = "";
+  if (j.result && j.result.ads_manager_url) {
+    h += '<p><a class="btn" target="_blank" href="' + esc(j.result.ads_manager_url) + '">Apri in Gestione inserzioni</a></p>';
+    h += j.error ? '<p class="muted">La campagna è stata creata solo in parte (in pausa): eliminala da Gestione inserzioni prima di riprovare.</p>'
+                 : (j.done ? '<p class="muted">Tutto è in PAUSA. Controlla anteprima, modulo e budget, poi attiva da Gestione inserzioni.</p>' : "");
+  }
+  link.innerHTML = h;
+}
+async function tick() {
+  try {
+    const r = await fetch(URL_AVANZA, {method: "POST"});
+    const j = await r.json();
+    if (j.log) render(j); else if (j.error) render({error: j.error, done: true});
+    if (!j.done && !(!j.log && j.error)) setTimeout(tick, 4000);
+  } catch (e) { setTimeout(tick, 8000); }
+}
+render({{ job|tojson }});
+{% if not job.done %}tick();{% endif %}
+</script>
 {% endblock %}

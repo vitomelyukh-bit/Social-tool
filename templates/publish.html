@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<form method="post" enctype="multipart/form-data" class="card" id="f">
+<form method="post" class="card" id="f">
   <h1>Pubblica post</h1>
   {% if not clients %}<div class="avviso">Prima aggiungi un cliente.</div>{% else %}
   <label for="cliente">Cliente</label>
@@ -23,16 +23,18 @@
     <label><input type="radio" name="kind" value="video" {{ 'checked' if form.kind == 'video' }}> Video (su Instagram diventa un Reel)</label>
   </div>
   <label for="media_file">Carica dal computer</label>
-  <input type="file" id="media_file" name="media_file" accept="image/jpeg,image/png,video/*">
-  <label for="media_url">oppure link diretto al file <span class="aiuto">(immagini per Instagram: solo JPG)</span></label>
+  {% if blob_enabled %}<input type="file" id="media_file" accept="image/jpeg,image/png,video/mp4,video/quicktime">
+  {% else %}<div class="aiuto">Caricamento dal computer non disponibile: manca l'archivio file (Vercel Blob).</div>{% endif %}
+  <label for="media_url">oppure link diretto al file</label>
   <input type="url" id="media_url" name="media_url" value="{{ form.media_url }}">
 
   <label for="when">Programma per <span class="aiuto">(lascia vuoto per pubblicare subito)</span></label>
   <input type="datetime-local" id="when" name="when" value="{{ form.when }}" min="{{ min_when }}" style="max-width:260px">
-  <div class="aiuto">Facebook: tra 10 minuti e 30 giorni. Instagram: il post parte all'ora indicata <strong>solo se il Meta Tool e' acceso</strong> su questo computer in quel momento.</div>
+  <div class="aiuto">Ora italiana. Facebook: tra 10 minuti e 30 giorni. Instagram: pubblicato automaticamente all'ora indicata{% if local %} <strong>solo se il Meta Tool e' acceso</strong> su questo computer{% else %} (puo' partire con qualche minuto di ritardo){% endif %}.</div>
 
   <input type="hidden" name="azione" value="pubblica">
-  <div class="azioni"><button type="submit" id="go">Pubblica</button><span class="muted" id="wait" style="display:none">Invio in corso, non chiudere la pagina...</span></div>
+  <div class="azioni"><button type="submit" id="go">Pubblica</button><span class="muted" id="wait" style="display:none"></span></div>
+  <progress id="bar" max="1" value="0" style="display:none"></progress>
   {% endif %}
 </form>
 {% if queue %}
@@ -50,9 +52,12 @@
   </table>
 </div>
 {% endif %}
-<script>
-document.getElementById('f').addEventListener('submit', function () {
-  document.getElementById('go').disabled = true; document.getElementById('wait').style.display = 'inline';
+{% if clients %}<script>
+const mf = document.getElementById("media_file");
+if (mf) mf.addEventListener("change", function () {
+  const t = mf.files.length ? mf.files[0].type : "";
+  if (t) document.querySelector("input[name=kind][value=" + (t.startsWith("video") ? "video" : "image") + "]").checked = true;
 });
-</script>
+wireUpload("f", "media_file", "media_url", function () { return document.querySelector("input[name=kind]:checked").value; });
+</script>{% endif %}
 {% endblock %}

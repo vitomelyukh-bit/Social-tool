@@ -37,7 +37,56 @@
   .azioni { display:flex; gap:10px; align-items:center; margin-top:20px; flex-wrap:wrap; }
   .scelta { display:flex; gap:18px; flex-wrap:wrap; }
   .scelta label { font-weight:400; display:flex; gap:6px; align-items:center; margin:6px 0; }
+  progress { width:100%; height:14px; margin-top:8px; }
 </style>
+<script>
+// Carica un file direttamente su Vercel Blob (senza passare dal server) e restituisce l'URL pubblico.
+async function uploadToBlob(file, kind, onProgress) {
+  const r = await fetch("{{ url_for('blob_token') }}", {method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({filename: file.name, kind: kind})});
+  const t = await r.json();
+  if (!r.ok) throw new Error(t.error || "Impossibile preparare il caricamento.");
+  return new Promise(function (resolve, reject) {
+    const x = new XMLHttpRequest();
+    x.open("PUT", "https://vercel.com/api/blob/?pathname=" + encodeURIComponent(t.pathname));
+    x.setRequestHeader("authorization", "Bearer " + t.token);
+    x.setRequestHeader("x-api-version", t.apiVersion);
+    x.setRequestHeader("x-vercel-blob-access", "public");
+    x.setRequestHeader("x-vercel-blob-store-id", t.storeId);
+    x.setRequestHeader("x-content-type", file.type || "application/octet-stream");
+    x.setRequestHeader("x-content-length", String(file.size));
+    x.upload.onprogress = function (e) { if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total); };
+    x.onload = function () {
+      let body = {}; try { body = JSON.parse(x.responseText); } catch (e) {}
+      if (x.status >= 200 && x.status < 300 && body.url) resolve(body.url);
+      else reject(new Error((body.error && body.error.message) || ("Caricamento non riuscito (HTTP " + x.status + ")")));
+    };
+    x.onerror = function () { reject(new Error("Caricamento interrotto: controlla la connessione.")); };
+    x.send(file);
+  });
+}
+// Su submit: se c'e' un file lo carica, mette l'URL nel campo indicato e poi invia il form.
+function wireUpload(formId, fileId, urlId, kindFn) {
+  const f = document.getElementById(formId), file = document.getElementById(fileId), url = document.getElementById(urlId);
+  const go = f.querySelector("button[type=submit]"), wait = document.getElementById("wait"), bar = document.getElementById("bar");
+  f.addEventListener("submit", async function (ev) {
+    if (f.dataset.skip === "1") return;
+    ev.preventDefault();
+    go.disabled = true; wait.style.display = "inline";
+    try {
+      if (file && file.files.length) {
+        bar.style.display = "block"; wait.textContent = "Caricamento del file...";
+        url.value = await uploadToBlob(file.files[0], kindFn(), function (p) { bar.value = p; });
+        file.value = "";
+      }
+      wait.textContent = "Invio in corso, non chiudere la pagina...";
+      f.dataset.skip = "1"; f.submit();
+    } catch (e) {
+      alert(e.message); go.disabled = false; wait.style.display = "none"; bar.style.display = "none";
+    }
+  });
+}
+</script>
 </head>
 <body>
 <nav>
@@ -47,6 +96,7 @@
   <a href="{{ url_for('report') }}" class="{{ 'on' if p.startswith('/report') }}">Report</a>
   <a href="{{ url_for('campaign') }}" class="{{ 'on' if p.startswith('/campagna') }}">Nuova campagna</a>
   <a href="{{ url_for('publish') }}" class="{{ 'on' if p.startswith('/pubblica') }}">Pubblica post</a>
+  {% if need_login and session.get('ok') %}<a href="{{ url_for('logout') }}" style="margin-left:auto">Esci</a>{% endif %}
 </nav>
 <main>
   {% with msgs = get_flashed_messages() %}{% for m in msgs %}<div class="ok">{{ m }}</div>{% endfor %}{% endwith %}

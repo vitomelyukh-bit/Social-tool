@@ -1,0 +1,15 @@
+# Ogni 5 minuti chiama /cron/tick: pubblica i post Instagram programmati.
+# (Sul piano Hobby di Vercel i cron possono girare solo una volta al giorno.)
+# Configurazione: secret CRON_SECRET e variabile APP_URL in Settings > Secrets and variables > Actions.
+name: tick
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - run: |
+          curl -fsS --max-time 300 -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" "${{ vars.APP_URL }}/cron/tick"

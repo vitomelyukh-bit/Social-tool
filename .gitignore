@@ -6,3 +6,7 @@ meta_tool.log
 scheduled_posts.json
 *.tmp
 clients.json
+data/
+.env.local
+.env*.local
+.vercel

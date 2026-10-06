@@ -1,42 +1,51 @@
 """
-Meta Tool - interfaccia web locale.
+Meta Tool - interfaccia web (Flask). Gira su Vercel o in locale.
 
-Avvio: doppio clic su "avvia.command" oppure  python3 app.py
-Poi apri http://127.0.0.1:5050
+Locale: doppio clic su "avvia.command" oppure  python3 app.py  -> http://127.0.0.1:5050
+Vercel: variabili META_TOKEN, APP_PASSWORD, CRON_SECRET + integrazioni Upstash Redis e Blob.
 """
-import json
+import hashlib
+import hmac
 import logging
 import os
 import re
+import sys
 import threading
 import time
 import traceback
 import uuid
 import warnings
 import webbrowser
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 warnings.filterwarnings("ignore", module="urllib3")
 
-from flask import Flask, abort, flash, redirect, render_template, request, url_for  # noqa: E402
-from werkzeug.utils import secure_filename  # noqa: E402
+from flask import (Flask, abort, flash, jsonify, redirect, render_template,  # noqa: E402
+                   request, session, url_for)
 
-import meta_ads  # noqa: E402
+import meta_ads  # noqa: E402,I100  (carica .env prima di store e blob)
+import blob  # noqa: E402
+import store  # noqa: E402
 from meta_ads import MetaError  # noqa: E402
 
-HERE = meta_ads.HERE
-UPLOADS = os.path.join(HERE, "uploads")
-SCHEDULE_FILE = os.path.join(HERE, "scheduled_posts.json")
+ON_VERCEL = bool(os.environ.get("VERCEL"))
+TZ = ZoneInfo("Europe/Rome")
 PORT = 5050
-os.makedirs(UPLOADS, exist_ok=True)
 
-logging.basicConfig(filename=os.path.join(HERE, "meta_tool.log"), level=logging.INFO,
-                    format="%(asctime)s %(levelname)s %(message)s")
+if ON_VERCEL:
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO, format="%(levelname)s %(message)s")
+else:
+    logging.basicConfig(filename=os.path.join(meta_ads.HERE, "meta_tool.log"), level=logging.INFO,
+                        format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("meta_tool")
 
+APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET", "meta-tool-locale")
-app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024 * 1024  # 1 GB
+app.secret_key = os.environ.get("SECRET_KEY") or hashlib.sha256(
+    f"meta-tool|{APP_PASSWORD}|{os.environ.get('META_TOKEN', '')}".encode()).hexdigest()
+app.config.update(SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_HTTPONLY=True,
+                  SESSION_COOKIE_SECURE=ON_VERCEL, PERMANENT_SESSION_LIFETIME=timedelta(days=30))
 
 CLIENT_FIELDS = [
     # (chiave, etichetta, tipo, obbligatorio, aiuto)
@@ -64,6 +73,7 @@ PERIODS = [
     ("last_14d", "Ultimi 14 giorni"), ("last_30d", "Ultimi 30 giorni"),
     ("this_month", "Questo mese"), ("last_month", "Mese scorso"), ("custom", "Date personalizzate"),
 ]
+JOB_TTL = 3 * 86400
 
 
 @app.template_filter("eur")
@@ -79,57 +89,117 @@ def show_error(e):
         return {"message": e.message, "detail": e.detail}
     log.error("Errore imprevisto: %s", traceback.format_exc())
     return {"message": "Si e' verificato un errore imprevisto.",
-            "detail": f"{type(e).__name__}: {e} (dettagli nel file meta_tool.log)"}
+            "detail": f"{type(e).__name__}: {e}"}
 
 
 @app.errorhandler(Exception)
 def unexpected(e):
-    if hasattr(e, "code") and hasattr(e, "get_response"):  # errori HTTP (404, 413...)
-        if e.code == 413:
-            return render_template("error.html", error={
-                "message": "Il file e' troppo grande (massimo 1 GB).", "detail": ""}), 413
+    if hasattr(e, "code") and hasattr(e, "get_response"):  # errori HTTP (404...)
         return e
-    return render_template("error.html", error=show_error(e)), 500
+    err = show_error(e)
+    if request.path.endswith("/avanza") or request.is_json:
+        return jsonify({"error": err}), 500
+    return render_template("error.html", error=err), 500
 
 
-def save_upload(field):
-    f = request.files.get(field)
-    if not f or not f.filename:
+@app.context_processor
+def template_globals():
+    return {"blob_enabled": blob.enabled(), "need_login": bool(APP_PASSWORD)}
+
+
+# --- Accesso -----------------------------------------------------------------
+
+@app.before_request
+def require_login():
+    if request.endpoint in ("login", "cron_tick", "static"):
         return None
-    name = f"{uuid.uuid4().hex[:8]}_{secure_filename(f.filename) or 'file'}"
-    path = os.path.join(UPLOADS, name)
-    f.save(path)
-    return path
+    if not APP_PASSWORD:
+        if ON_VERCEL:  # online senza password = chiunque col link userebbe il token
+            return render_template("error.html", error={
+                "message": "Accesso non configurato.",
+                "detail": "Imposta la variabile APP_PASSWORD su Vercel e rifai il deploy."}), 503
+        return None
+    if not session.get("ok"):
+        if request.method != "GET":
+            abort(401)
+        return redirect(url_for("login", next=request.full_path))
+    return None
 
 
-# --- Lavori in background (creazione campagna, pubblicazione) ---------------
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    error = None
+    if request.method == "POST":
+        if APP_PASSWORD and hmac.compare_digest(request.form.get("password", ""), APP_PASSWORD):
+            session.permanent = True
+            session["ok"] = True
+            nxt = request.args.get("next", "")
+            return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for("home"))
+        time.sleep(1)
+        error = {"message": "Password errata.", "detail": ""}
+    return render_template("login.html", error=error)
 
-JOBS = {}
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 
-def start_job(kind, fn):
-    jid = uuid.uuid4().hex[:10]
-    job = {"id": jid, "kind": kind, "log": [], "done": False, "error": None, "result": None,
-           "started": datetime.now().strftime("%H:%M:%S")}
-    JOBS[jid] = job
+# --- Upload diretto su Vercel Blob -------------------------------------------
 
-    def run():
-        try:
-            job["result"] = fn(lambda m: job["log"].append(m))
-        except Exception as e:  # noqa: BLE001 - mostriamo tutto in chiaro
-            job["error"] = show_error(e)
-            job["result"] = getattr(e, "partial", None)
-        finally:
-            job["done"] = True
+@app.route("/blob/token", methods=["POST"])
+def blob_token():
+    if not blob.enabled():
+        return jsonify({"error": "Archivio file (Vercel Blob) non configurato."}), 400
+    d = request.get_json(force=True)
+    name = re.sub(r"[^A-Za-z0-9._-]+", "-", d.get("filename", "file"))[-80:] or "file"
+    types = ["image/jpeg", "image/png"] if d.get("kind") == "image" else ["video/mp4", "video/quicktime"]
+    pathname = f"uploads/{datetime.now(TZ).strftime('%Y%m%d')}/{name}"
+    return jsonify({"token": blob.client_token(pathname, types), "pathname": pathname,
+                    "storeId": blob.store_id(), "apiVersion": blob.API_VERSION})
 
-    threading.Thread(target=run, daemon=True).start()
-    return jid
+
+# --- Lavori a passaggi (campagna, post) -------------------------------------
+
+def save_job(s):
+    store.set(f"job:{s['id']}", s, expire_s=JOB_TTL)
+
+
+def start_job(state):
+    state["id"] = uuid.uuid4().hex[:12]
+    save_job(state)
+    return state["id"]
+
+
+def public_job(s):
+    return {k: s.get(k) for k in ("id", "kind", "log", "done", "error", "result")}
 
 
 @app.route("/lavoro/<jid>")
 def job_page(jid):
-    job = JOBS.get(jid) or abort(404)
-    return render_template("job.html", job=job)
+    s = store.get(f"job:{jid}") or abort(404)
+    return render_template("job.html", job=public_job(s))
+
+
+@app.route("/lavoro/<jid>/avanza", methods=["POST"])
+def job_advance(jid):
+    """Esegue passaggi per ~20 secondi o finche' serve aspettare Meta; il browser richiama."""
+    if not store.lock(f"lock:job:{jid}", 90):
+        s = store.get(f"job:{jid}") or abort(404)
+        return jsonify(public_job(s))
+    try:
+        s = store.get(f"job:{jid}") or abort(404)
+        t0 = time.time()
+        while not s.get("done") and time.time() - t0 < 20:
+            before = s["step"]
+            meta_ads.advance(s)
+            save_job(s)
+            if s["step"] == before:  # in attesa di Meta
+                break
+        return jsonify(public_job(s))
+    finally:
+        store.unlock(f"lock:job:{jid}")
 
 
 # --- Home / Clienti ----------------------------------------------------------
@@ -235,7 +305,7 @@ def report():
         currencies = {r["currency"] for r in ok if r["currency"]}
         totals = {"spend": spend, "leads": leads, "cpl": spend / leads if leads else None,
                   "currency": currencies.pop() if len(currencies) == 1 else ""}
-    today = date.today()
+    today = datetime.now(TZ).date()
     return render_template("report.html", clients=all_clients, periods=PERIODS, period=period,
                            since=since or (today - timedelta(days=30)).isoformat(),
                            until=until or today.isoformat(), selected=selected,
@@ -258,14 +328,10 @@ def campaign():
     if request.method == "POST" and request.form.get("azione") == "crea":
         form.update({k: request.form.get(k, "").strip() for k in form})
         overrides = {}
-        video_path = save_upload("video_file")
-        if video_path:
-            overrides["video_path"] = video_path
-            overrides["video_url"] = None
-        elif form["video_url"]:
+        if form["video_url"]:
             overrides["video_url"] = form["video_url"]
         else:
-            errors.append("Serve un video: incolla un link oppure carica un file.")
+            errors.append("Serve un video: carica un file oppure incolla un link.")
         for k, label in [("primary_text", "Testo"), ("headline", "Titolo")]:
             if not form[k]:
                 errors.append(f"'{label}' e' obbligatorio.")
@@ -282,7 +348,7 @@ def campaign():
             if overrides["daily_budget_eur"] < 1:
                 errors.append("Il budget giornaliero e' troppo basso.")
         if not errors:
-            jid = start_job("campagna", lambda lg: meta_ads.launch(key, overrides, log=lg))
+            jid = start_job(meta_ads.new_campaign(key, overrides))
             return redirect(url_for("job_page", jid=jid))
     return render_template("campaign.html", clients=all_clients, key=key, client=c, form=form, errors=errors)
 
@@ -290,50 +356,89 @@ def campaign():
 # --- Pubblica post -----------------------------------------------------------
 
 def load_schedule():
-    if not os.path.exists(SCHEDULE_FILE):
-        return []
-    with open(SCHEDULE_FILE, encoding="utf-8") as f:
-        return json.load(f)
+    return store.get("schedule", [])
 
 
-def save_schedule(items):
-    tmp = SCHEDULE_FILE + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(items, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, SCHEDULE_FILE)
+def update_schedule(fn):
+    """Modifica la lista dei post programmati sotto lock (fn riceve e modifica la lista)."""
+    for _ in range(50):
+        if store.lock("lock:schedule", 30):
+            break
+        time.sleep(0.2)
+    else:
+        raise RuntimeError("Archivio occupato, riprova tra qualche secondo.")
+    try:
+        items = load_schedule()
+        fn(items)
+        store.set("schedule", items)
+    finally:
+        store.unlock("lock:schedule")
 
 
-SCHEDULE_LOCK = threading.Lock()
+def process_schedule(budget_s=240):
+    """Pubblica su Instagram i post programmati arrivati all'ora (le API Instagram non
+    supportano la programmazione). Chiamato dal cron o dal thread locale."""
+    t0 = time.time()
+    if not store.lock("lock:tick", budget_s + 30):
+        return {"skipped": "tick gia' in corso"}
+    processed = []
+    try:
+        for it in load_schedule():
+            if it["status"] != "in attesa" or it["when"] > time.time():
+                continue
+            s = it.get("state") or meta_ads.new_post(it["client"], it["caption"], it["kind"],
+                                                     it["media_url"], fb=False, ig=True)
+            while not s.get("done") and time.time() - t0 < budget_s:
+                before = s["step"]
+                meta_ads.advance(s)
+                if s["step"] == before and not s.get("done"):
+                    time.sleep(8)
+
+            def save(items, it=it, s=s):
+                for x in items:
+                    if x["id"] == it["id"] and x["status"] == "in attesa":
+                        x["state"] = s
+                        if s.get("error"):
+                            x["status"] = "errore"
+                            x["error"] = f"{s['error']['message']} {s['error']['detail']}"
+                        elif s.get("done"):
+                            x["status"] = "pubblicato"
+
+            update_schedule(save)
+            processed.append(it["id"])
+            if time.time() - t0 >= budget_s:
+                break
+    finally:
+        store.unlock("lock:tick")
+    return {"processed": processed}
 
 
-def scheduler_loop():
-    """Pubblica su Instagram i post programmati (le API Instagram non hanno la programmazione)."""
-    while True:
-        try:
-            with SCHEDULE_LOCK:
-                items = load_schedule()
-            for it in items:
-                if it["status"] != "in attesa" or it["when"] > time.time():
-                    continue
-                try:
-                    c = meta_ads.load_client(it["client"])
-                    it["result_id"] = meta_ads.publish_instagram(
-                        c, it["caption"], it["kind"], it.get("media_url"), it.get("media_path"),
-                        log=lambda m: None)
-                    it["status"] = "pubblicato"
-                except Exception as e:  # noqa: BLE001
-                    err = show_error(e)
-                    it["status"] = "errore"
-                    it["error"] = f"{err['message']} {err['detail']}"
-                with SCHEDULE_LOCK:
-                    current = load_schedule()
-                    for x in current:
-                        if x["id"] == it["id"]:
-                            x.update(it)
-                    save_schedule(current)
-        except Exception:  # noqa: BLE001
-            log.error("Scheduler: %s", traceback.format_exc())
-        time.sleep(30)
+def cleanup_blobs(max_age_h=48):
+    """Elimina i file caricati piu' vecchi di 48 ore, tranne quelli di post ancora in attesa."""
+    if not blob.enabled():
+        return 0
+    keep = {it["media_url"] for it in load_schedule() if it["status"] == "in attesa"}
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=max_age_h)
+    old = [b["url"] for b in blob.list_all()
+           if b["url"] not in keep
+           and datetime.fromisoformat(b["uploadedAt"].replace("Z", "+00:00")) < cutoff]
+    blob.delete(old)
+    return len(old)
+
+
+@app.route("/cron/tick")
+def cron_tick():
+    secret = os.environ.get("CRON_SECRET", "")
+    if not secret or not hmac.compare_digest(request.headers.get("Authorization", ""), f"Bearer {secret}"):
+        abort(401)
+    out = process_schedule()
+    out["blob_cleaned"] = cleanup_blobs()
+    return jsonify(out)
+
+
+def parse_local_dt(value):
+    """Il campo datetime-local e' in ora italiana, a prescindere dal fuso del server."""
+    return datetime.fromisoformat(value).replace(tzinfo=TZ).timestamp()
 
 
 @app.route("/pubblica", methods=["GET", "POST"])
@@ -346,21 +451,17 @@ def publish():
         form = {k: request.form.get(k, "").strip() for k in ("message", "media_url", "kind", "when")}
         form["fb"] = request.form.get("fb", "")
         form["ig"] = request.form.get("ig", "")
-        media_path = save_upload("media_file")
-        kind = form["kind"] if (media_path or form["media_url"]) else None
+        kind = form["kind"] if form["media_url"] else None
         if not (form["fb"] or form["ig"]):
             errors.append("Scegli almeno una destinazione: Facebook e/o Instagram.")
         if not form["message"] and not kind:
             errors.append("Scrivi un testo o allega un'immagine/video.")
         if form["ig"] and not kind:
             errors.append("Per Instagram serve un'immagine o un video.")
-        if kind == "image" and form["ig"] and form["media_url"] and not media_path \
-                and not re.search(r"\.jpe?g($|\?)", form["media_url"], re.I):
-            errors.append("Per Instagram l'immagine da link deve essere un JPG: in alternativa caricala dal computer.")
         ts = None
         if form["when"]:
             try:
-                ts = datetime.fromisoformat(form["when"]).timestamp()
+                ts = parse_local_dt(form["when"])
             except ValueError:
                 errors.append("Data/ora di programmazione non valida.")
             else:
@@ -371,57 +472,49 @@ def publish():
                     errors.append("L'orario di programmazione e' nel passato.")
         if not errors:
             c = all_clients[key]
-            media_url = None if media_path else (form["media_url"] or None)
-
-            def run(lg):
-                out = {}
-                if form["fb"]:
-                    lg("Pubblico su Facebook..." if not ts else "Programmo su Facebook...")
-                    out["facebook_id"] = meta_ads.publish_facebook(c, form["message"], kind, media_url, media_path, ts)
-                    lg(f"Facebook OK ({out['facebook_id']})" + (" - programmato" if ts else ""))
-                if form["ig"]:
-                    if ts:
-                        with SCHEDULE_LOCK:
-                            items = load_schedule()
-                            items.append({"id": uuid.uuid4().hex[:10], "client": key, "client_name": c["name"],
-                                          "caption": form["message"], "kind": kind, "media_url": media_url,
-                                          "media_path": media_path, "when": ts, "status": "in attesa"})
-                            save_schedule(items)
-                        lg("Instagram programmato: verra' pubblicato all'ora indicata "
-                           "(il programma deve essere acceso in quel momento).")
-                        out["instagram_scheduled"] = True
-                    else:
-                        lg("Pubblico su Instagram...")
-                        out["instagram_id"] = meta_ads.publish_instagram(c, form["message"], kind, media_url,
-                                                                         media_path, log=lg)
-                        lg(f"Instagram OK ({out['instagram_id']})")
-                return out
-
-            jid = start_job("post", run)
-            return redirect(url_for("job_page", jid=jid))
-    with SCHEDULE_LOCK:
-        queue = sorted(load_schedule(), key=lambda x: x["when"], reverse=True)
+            if form["ig"] and ts:
+                item = {"id": uuid.uuid4().hex[:10], "client": key, "client_name": c["name"],
+                        "caption": form["message"], "kind": kind, "media_url": form["media_url"],
+                        "when": ts, "status": "in attesa"}
+                update_schedule(lambda items: items.append(item))
+                if not form["fb"]:
+                    flash("Post Instagram programmato.")
+                    return redirect(url_for("publish"))
+            s = meta_ads.new_post(key, form["message"], kind, form["media_url"] or None,
+                                  fb=bool(form["fb"]), ig=bool(form["ig"]) and not ts, scheduled_ts=ts)
+            if form["ig"] and ts:
+                s["log"].append("Instagram programmato: verra' pubblicato automaticamente all'ora indicata.")
+            return redirect(url_for("job_page", jid=start_job(s)))
+    queue = sorted(load_schedule(), key=lambda x: x["when"], reverse=True)[:30]
     for q in queue:
-        q["when_txt"] = datetime.fromtimestamp(q["when"]).strftime("%d/%m/%Y %H:%M")
-    min_when = (datetime.now() + timedelta(minutes=15)).strftime("%Y-%m-%dT%H:%M")
+        q["when_txt"] = datetime.fromtimestamp(q["when"], TZ).strftime("%d/%m/%Y %H:%M")
+    min_when = (datetime.now(TZ) + timedelta(minutes=15)).strftime("%Y-%m-%dT%H:%M")
     return render_template("publish.html", clients=all_clients, key=key, form=form, errors=errors,
-                           queue=queue, min_when=min_when)
+                           queue=queue, min_when=min_when, local=not ON_VERCEL)
 
 
 @app.route("/pubblica/annulla/<sid>", methods=["POST"])
 def publish_cancel(sid):
-    with SCHEDULE_LOCK:
-        items = load_schedule()
+    def cancel(items):
         for it in items:
             if it["id"] == sid and it["status"] == "in attesa":
                 it["status"] = "annullato"
-        save_schedule(items)
+    update_schedule(cancel)
     flash("Post Instagram programmato annullato.")
     return redirect(url_for("publish"))
 
 
+def local_scheduler():
+    while True:
+        try:
+            process_schedule(budget_s=600)
+        except Exception:  # noqa: BLE001
+            log.error("Scheduler: %s", traceback.format_exc())
+        time.sleep(30)
+
+
 if __name__ == "__main__":
-    threading.Thread(target=scheduler_loop, daemon=True).start()
+    threading.Thread(target=local_scheduler, daemon=True).start()
     if not os.environ.get("NO_BROWSER"):
         threading.Timer(1.2, lambda: webbrowser.open(f"http://127.0.0.1:{PORT}")).start()
     print(f"Meta Tool attivo su http://127.0.0.1:{PORT}  (chiudi questa finestra per spegnerlo)")
