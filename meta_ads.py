@@ -208,6 +208,34 @@ def _act(s):
     return f"act_{s['c']['ad_account_id']}"
 
 
+def step_checks(s):
+    """Controlli prima di creare qualsiasi cosa, per non lasciare campagne a meta'."""
+    pid = s["c"]["page_id"]
+    page = call("GET", pid, fields="name,leadgen_tos_accepted")
+    if not page.get("leadgen_tos_accepted"):
+        raise MetaError(
+            f"La pagina '{page.get('name', pid)}' non ha ancora accettato le Condizioni di Meta "
+            "per le inserzioni di generazione contatti.",
+            "Un amministratore della pagina deve aprire questo link e accettare (si fa una volta sola): "
+            f"https://www.facebook.com/ads/leadgen/tos?page_id={pid}")
+    s["log"].append("Controlli pagina OK.")
+    return True
+
+
+def cleanup_campaign(s):
+    """Elimina quanto creato da un lavoro fallito: la campagna (con gruppo e inserzione
+    che contiene) e archivia il modulo lead (i moduli non si possono eliminare)."""
+    r = s["result"]
+    if r.get("campaign_id"):
+        call("DELETE", r["campaign_id"])
+        s["log"].append(f"Campagna {r['campaign_id']} eliminata.")
+    if r.get("form_id"):
+        call("POST", r["form_id"], token_=page_token(s["c"]["page_id"]), status="ARCHIVED")
+        s["log"].append(f"Modulo lead {r['form_id']} archiviato.")
+    s["cleaned"] = True
+    s["result"] = {}
+
+
 def step_upload_video(s):
     s["result"]["video_id"] = call("POST", f"{_act(s)}/advideos", file_url=s["c"]["video_url"])["id"]
     s["log"].append(f"Video inviato a Meta ({s['result']['video_id']}), attendo l'elaborazione...")
@@ -331,7 +359,7 @@ def step_ad(s):
     return True
 
 
-CAMPAIGN_STEPS = [step_upload_video, step_wait_video, step_campaign, step_adset,
+CAMPAIGN_STEPS = [step_checks, step_upload_video, step_wait_video, step_campaign, step_adset,
                   step_form, step_creative, step_ad]
 
 

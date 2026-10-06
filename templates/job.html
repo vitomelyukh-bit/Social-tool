@@ -8,21 +8,30 @@
   <div class="azioni"><a class="btn sec" href="{{ url_for('campaign' if job.kind == 'campagna' else 'publish') }}">Torna al modulo</a></div>
 </div>
 <script>
-const URL_AVANZA = "{{ url_for('job_advance', jid=job.id) }}", KIND = "{{ job.kind }}";
+const URL_AVANZA = "{{ url_for('job_advance', jid=job.id) }}", URL_ELIMINA = "{{ url_for('job_cleanup', jid=job.id) }}";
 function esc(t) { const d = document.createElement("div"); d.textContent = t || ""; return d.innerHTML; }
+function linkify(t) { return esc(t).replace(/https:\/\/[^\s<]+/g, function (u) { return '<a target="_blank" href="' + u + '">' + u + '</a>'; }); }
 function render(j) {
   document.getElementById("log").innerHTML = (j.log || []).map(function (l) { return "<li>" + esc(l) + "</li>"; }).join("");
   const st = document.getElementById("stato"), link = document.getElementById("link");
-  if (j.error) st.innerHTML = '<div class="errore"><strong>' + esc(j.error.message) + '</strong><small>' + esc(j.error.detail) + '</small></div>';
+  if (j.error) st.innerHTML = '<div class="errore"><strong>' + esc(j.error.message) + '</strong><small>' + linkify(j.error.detail) + '</small></div>';
   else if (j.done) st.innerHTML = '<div class="ok"><strong>Fatto!</strong></div>';
   else st.innerHTML = '<div class="avviso">In corso... non chiudere questa pagina. Con un video può richiedere qualche minuto.</div>';
   let h = "";
   if (j.result && j.result.ads_manager_url) {
     h += '<p><a class="btn" target="_blank" href="' + esc(j.result.ads_manager_url) + '">Apri in Gestione inserzioni</a></p>';
-    h += j.error ? '<p class="muted">La campagna è stata creata solo in parte (in pausa): eliminala da Gestione inserzioni prima di riprovare.</p>'
+    h += j.error ? '<p class="muted">La campagna è stata creata solo in parte (in pausa). Eliminala prima di riprovare:</p>' +
+                   '<p><button class="rosso" onclick="cleanup(this)">Elimina la parte creata</button></p>'
                  : (j.done ? '<p class="muted">Tutto è in PAUSA. Controlla anteprima, modulo e budget, poi attiva da Gestione inserzioni.</p>' : "");
   }
+  if (j.cleaned) h += '<div class="ok">Parte creata eliminata: puoi riprovare.</div>';
   link.innerHTML = h;
+}
+async function cleanup(btn) {
+  if (!confirm("Eliminare da Meta la campagna creata a metà?")) return;
+  btn.disabled = true;
+  const r = await fetch(URL_ELIMINA, {method: "POST"}); const j = await r.json();
+  if (j.log) render(Object.assign(j, {error: j.error})); else { alert(j.error.message + "\n" + j.error.detail); btn.disabled = false; }
 }
 async function tick() {
   try {

@@ -173,7 +173,7 @@ def start_job(state):
 
 
 def public_job(s):
-    return {k: s.get(k) for k in ("id", "kind", "log", "done", "error", "result")}
+    return {k: s.get(k) for k in ("id", "kind", "log", "done", "error", "result", "cleaned")}
 
 
 @app.route("/lavoro/<jid>")
@@ -197,6 +197,26 @@ def job_advance(jid):
             save_job(s)
             if s["step"] == before:  # in attesa di Meta
                 break
+        return jsonify(public_job(s))
+    finally:
+        store.unlock(f"lock:job:{jid}")
+
+
+@app.route("/lavoro/<jid>/elimina", methods=["POST"])
+def job_cleanup(jid):
+    """Elimina la campagna creata a meta' da un lavoro andato in errore."""
+    if not store.lock(f"lock:job:{jid}", 90):
+        return jsonify({"error": {"message": "Operazione gia' in corso, riprova tra poco.", "detail": ""}}), 409
+    try:
+        s = store.get(f"job:{jid}") or abort(404)
+        if s["kind"] != "campagna" or not s.get("error"):
+            abort(400)
+        try:
+            meta_ads.cleanup_campaign(s)
+        except MetaError as e:
+            save_job(s)
+            return jsonify({"error": {"message": e.message, "detail": e.detail}}), 502
+        save_job(s)
         return jsonify(public_job(s))
     finally:
         store.unlock(f"lock:job:{jid}")
