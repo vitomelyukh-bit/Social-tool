@@ -206,6 +206,14 @@ def job_advance(jid):
             update_schedule(lambda items: items.append(item))
             s["listed"] = True
             save_job(s)
+        if s.get("done") and s.get("ig_check_only") and not s.get("error") and not s.get("ig_listed"):
+            # file verificato da Instagram: ora il post entra nella coda dello scheduler
+            item = {"id": uuid.uuid4().hex[:10], "network": "instagram", "client": s["client"],
+                    "client_name": s["c"]["name"], "caption": s["message"], "kind": s["media"],
+                    "media_url": s["media_url"], "when": s["scheduled_ts"], "status": "in attesa"}
+            update_schedule(lambda items: items.append(item))
+            s["ig_listed"] = True
+            save_job(s)
         return jsonify(public_job(s))
     finally:
         store.unlock(f"lock:job:{jid}")
@@ -502,19 +510,9 @@ def publish():
                 elif delta < 60:
                     errors.append("L'orario di programmazione e' nel passato.")
         if not errors:
-            c = all_clients[key]
-            if form["ig"] and ts:
-                item = {"id": uuid.uuid4().hex[:10], "network": "instagram", "client": key, "client_name": c["name"],
-                        "caption": form["message"], "kind": kind, "media_url": form["media_url"],
-                        "when": ts, "status": "in attesa"}
-                update_schedule(lambda items: items.append(item))
-                if not form["fb"]:
-                    flash("Post Instagram programmato.")
-                    return redirect(url_for("publish"))
             s = meta_ads.new_post(key, form["message"], kind, form["media_url"] or None,
-                                  fb=bool(form["fb"]), ig=bool(form["ig"]) and not ts, scheduled_ts=ts)
-            if form["ig"] and ts:
-                s["log"].append("Instagram programmato: verra' pubblicato automaticamente all'ora indicata.")
+                                  fb=bool(form["fb"]), ig=bool(form["ig"]), scheduled_ts=ts,
+                                  ig_check_only=bool(ts))
             return redirect(url_for("job_page", jid=start_job(s)))
     queue = sorted(load_schedule(), key=lambda x: x["when"], reverse=True)[:30]
     for q in queue:

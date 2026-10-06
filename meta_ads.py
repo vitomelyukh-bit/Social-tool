@@ -406,12 +406,15 @@ def report(key):
 
 # --- Post organici (Pagina Facebook + Instagram) ----------------------------
 
-def new_post(key, message, kind=None, media_url=None, fb=True, ig=True, scheduled_ts=None):
+def new_post(key, message, kind=None, media_url=None, fb=True, ig=True, scheduled_ts=None,
+             ig_check_only=False):
     """kind: None (solo testo), 'image' o 'video'. scheduled_ts vale per Facebook (nativo);
-    per Instagram la programmazione la gestisce lo scheduler della web app."""
+    per Instagram la programmazione la gestisce lo scheduler della web app.
+    ig_check_only: fa elaborare il file a Instagram senza pubblicarlo (verifica al momento
+    della programmazione, cosi' un file non valido si scopre subito)."""
     return {"kind": "post", "client": key, "c": load_client(key), "step": 0, "log": [], "result": {},
             "message": message, "media": kind, "media_url": media_url, "fb": fb, "ig": ig,
-            "scheduled_ts": scheduled_ts, "max_waits": 60}
+            "scheduled_ts": scheduled_ts, "ig_check_only": ig_check_only, "max_waits": 60}
 
 
 def instagram_account(page_id):
@@ -481,9 +484,13 @@ def step_ig_wait(s):
 def step_ig_publish(s):
     if not s["ig"]:
         return True
-    s["result"]["instagram_id"] = call("POST", f"{s['ig_id']}/media_publish",
-                                       creation_id=s["ig_container"])["id"]
-    s["log"].append(f"Instagram: pubblicato ({s['result']['instagram_id']})")
+    if s.get("ig_check_only"):
+        s["log"].append("Instagram: file verificato e accettato. Verra' pubblicato automaticamente "
+                        "all'ora indicata.")
+    else:
+        s["result"]["instagram_id"] = call("POST", f"{s['ig_id']}/media_publish",
+                                           creation_id=s["ig_container"])["id"]
+        s["log"].append(f"Instagram: pubblicato ({s['result']['instagram_id']})")
     if s.get("temp_photo"):
         try:
             call("DELETE", s["temp_photo"], token_=page_token(s["c"]["page_id"]))
