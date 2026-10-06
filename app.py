@@ -197,6 +197,15 @@ def job_advance(jid):
             save_job(s)
             if s["step"] == before:  # in attesa di Meta
                 break
+        if (s.get("done") and s["kind"] == "post" and s.get("scheduled_ts")
+                and s["result"].get("facebook_id") and not s.get("listed")):
+            # i post Facebook programmati compaiono nella lista, per poterli annullare
+            item = {"id": uuid.uuid4().hex[:10], "network": "facebook", "client": s["client"],
+                    "client_name": s["c"]["name"], "caption": s["message"], "when": s["scheduled_ts"],
+                    "status": "programmato", "fb_id": s["result"]["facebook_id"]}
+            update_schedule(lambda items: items.append(item))
+            s["listed"] = True
+            save_job(s)
         return jsonify(public_job(s))
     finally:
         store.unlock(f"lock:job:{jid}")
@@ -404,7 +413,8 @@ def process_schedule(budget_s=240):
     processed = []
     try:
         for it in load_schedule():
-            if it["status"] != "in attesa" or it["when"] > time.time():
+            if it.get("network", "instagram") != "instagram" or it["status"] != "in attesa" \
+                    or it["when"] > time.time():
                 continue
             s = it.get("state") or meta_ads.new_post(it["client"], it["caption"], it["kind"],
                                                      it["media_url"], fb=False, ig=True)
@@ -493,7 +503,7 @@ def publish():
         if not errors:
             c = all_clients[key]
             if form["ig"] and ts:
-                item = {"id": uuid.uuid4().hex[:10], "client": key, "client_name": c["name"],
+                item = {"id": uuid.uuid4().hex[:10], "network": "instagram", "client": key, "client_name": c["name"],
                         "caption": form["message"], "kind": kind, "media_url": form["media_url"],
                         "when": ts, "status": "in attesa"}
                 update_schedule(lambda items: items.append(item))
@@ -508,6 +518,10 @@ def publish():
     queue = sorted(load_schedule(), key=lambda x: x["when"], reverse=True)[:30]
     for q in queue:
         q["when_txt"] = datetime.fromtimestamp(q["when"], TZ).strftime("%d/%m/%Y %H:%M")
+        q.setdefault("network", "instagram")
+        if q["status"] == "programmato" and q["when"] < time.time():
+            q["status"] = "pubblicato"
+        q["can_cancel"] = q["status"] in ("in attesa", "programmato")
     min_when = (datetime.now(TZ) + timedelta(minutes=15)).strftime("%Y-%m-%dT%H:%M")
     return render_template("publish.html", clients=all_clients, key=key, form=form, errors=errors,
                            queue=queue, min_when=min_when, local=not ON_VERCEL)
@@ -515,12 +529,23 @@ def publish():
 
 @app.route("/pubblica/annulla/<sid>", methods=["POST"])
 def publish_cancel(sid):
+    item = next((x for x in load_schedule() if x["id"] == sid), None) or abort(404)
+    if item.get("network") == "facebook":
+        if item["status"] != "programmato" or item["when"] < time.time():
+            abort(400)
+        try:  # su Facebook il post programmato esiste gia': va eliminato da Meta
+            c = meta_ads.load_client(item["client"])
+            meta_ads.call("DELETE", item["fb_id"], token_=meta_ads.page_token(c["page_id"]))
+        except MetaError as e:
+            flash(f"Non sono riuscito ad annullare il post su Facebook: {e.message} {e.detail}")
+            return redirect(url_for("publish"))
+
     def cancel(items):
         for it in items:
-            if it["id"] == sid and it["status"] == "in attesa":
+            if it["id"] == sid and it["status"] in ("in attesa", "programmato"):
                 it["status"] = "annullato"
     update_schedule(cancel)
-    flash("Post Instagram programmato annullato.")
+    flash("Post programmato annullato.")
     return redirect(url_for("publish"))
 
 

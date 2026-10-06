@@ -39,14 +39,14 @@
 </form>
 {% if queue %}
 <div class="card">
-  <h2>Post Instagram programmati</h2>
+  <h2>Post programmati</h2>
   <table>
-    <tr><th>Quando</th><th>Cliente</th><th>Testo</th><th>Stato</th><th></th></tr>
+    <tr><th>Quando</th><th>Dove</th><th>Cliente</th><th>Testo</th><th>Stato</th><th></th></tr>
     {% for q in queue %}
     <tr>
-      <td>{{ q.when_txt }}</td><td>{{ q.client_name }}</td><td>{{ q.caption[:80] }}</td>
+      <td>{{ q.when_txt }}</td><td>{{ 'Facebook' if q.network == 'facebook' else 'Instagram' }}</td><td>{{ q.client_name }}</td><td>{{ q.caption[:80] }}</td>
       <td>{{ q.status }}{% if q.error %}<div class="errore" style="margin:4px 0 0">{{ q.error }}</div>{% endif %}</td>
-      <td>{% if q.status == 'in attesa' %}<form method="post" action="{{ url_for('publish_cancel', sid=q.id) }}"><button class="rosso">Annulla</button></form>{% endif %}</td>
+      <td>{% if q.can_cancel %}<form method="post" action="{{ url_for('publish_cancel', sid=q.id) }}" onsubmit="return confirm('Annullare questo post programmato?')"><button class="rosso">Annulla</button></form>{% endif %}</td>
     </tr>
     {% endfor %}
   </table>
