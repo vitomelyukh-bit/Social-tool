@@ -30,7 +30,7 @@
 
   <label for="when">Programma per <span class="aiuto">(lascia vuoto per pubblicare subito)</span></label>
   <input type="datetime-local" id="when" name="when" value="{{ form.when }}" min="{{ min_when }}" style="max-width:260px">
-  <div class="aiuto">Ora italiana. Facebook: tra 10 minuti e 30 giorni. Instagram: pubblicato automaticamente all'ora indicata{% if local %} <strong>solo se il Meta Tool e' acceso</strong> su questo computer{% else %} (puo' partire con qualche minuto di ritardo){% endif %}.</div>
+  <div class="aiuto">Ora italiana. Facebook: tra 10 minuti e 28 giorni. Instagram: pubblicato automaticamente all'ora indicata{% if local %} <strong>solo se il Meta Tool e' acceso</strong> su questo computer{% else %} (puo' partire con qualche minuto di ritardo){% endif %}.</div>
 
   <input type="hidden" name="azione" value="pubblica">
   <div class="azioni"><button type="submit" id="go">Pubblica</button><span class="muted" id="wait" style="display:none"></span></div>

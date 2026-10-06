@@ -496,8 +496,9 @@ def publish():
                 errors.append("Data/ora di programmazione non valida.")
             else:
                 delta = ts - time.time()
-                if form["fb"] and not (600 <= delta <= 30 * 86400):
-                    errors.append("Facebook accetta programmazioni tra 10 minuti e 30 giorni da adesso.")
+                # la doc dice 30 giorni, ma per le foto Meta rifiuta gia' a 29 (verificato 10/2026)
+                if form["fb"] and not (600 <= delta <= 28 * 86400):
+                    errors.append("Facebook accetta programmazioni tra 10 minuti e 28 giorni da adesso.")
                 elif delta < 60:
                     errors.append("L'orario di programmazione e' nel passato.")
         if not errors:
