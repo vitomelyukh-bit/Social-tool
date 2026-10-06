@@ -1,0 +1,8 @@
+.env
+.venv/
+uploads/
+__pycache__/
+meta_tool.log
+scheduled_posts.json
+*.tmp
+clients.json

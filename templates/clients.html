@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+{% if not has_token %}<div class="avviso"><strong>Token Meta mancante.</strong> Apri il file <code>.env</code> nella cartella del tool, inserisci <code>META_TOKEN=...</code> e riavvia.</div>{% endif %}
+<div class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h1 style="margin:0">Clienti</h1>
+    <a class="btn" href="{{ url_for('client_edit') }}">+ Aggiungi cliente</a>
+  </div>
+  {% if clients %}
+  <table>
+    <tr><th>Nome</th><th>Account pubblicitario</th><th>Pagina</th><th>Zona</th><th class="num">Budget/giorno</th><th></th></tr>
+    {% for k, c in clients.items() %}
+    <tr>
+      <td><strong>{{ c.name }}</strong></td>
+      <td>{{ c.ad_account_id }}</td>
+      <td>{{ c.page_id }}</td>
+      <td>{{ c.radius_km }} km da {{ c.lat }}, {{ c.lng }}</td>
+      <td class="num">{{ c.daily_budget_eur|eur }} EUR</td>
+      <td><a href="{{ url_for('client_edit', key=k) }}">Modifica</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">Nessun cliente. Aggiungine uno.</p>{% endif %}
+</div>
+{% endblock %}

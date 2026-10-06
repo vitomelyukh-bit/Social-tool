@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block content %}
+<form method="post" enctype="multipart/form-data" class="card" id="f">
+  <h1>Nuova campagna lead</h1>
+  <p class="muted">Crea campagna, gruppo di inserzioni, modulo contatti (nome, telefono, email) e inserzione video. <strong>Tutto viene creato in PAUSA</strong>: lo attivi tu da Gestione inserzioni dopo averlo controllato.</p>
+  {% if not clients %}<div class="avviso">Prima aggiungi un cliente.</div>{% else %}
+  <label for="cliente">Cliente</label>
+  <select id="cliente" name="cliente" onchange="document.getElementById('azione').value='cambia'; this.form.submit()">
+    {% for k, c in clients.items() %}<option value="{{ k }}" {{ 'selected' if k == key }}>{{ c.name }}</option>{% endfor %}
+  </select>
+  {% if not client.get('dsa_beneficiary') %}<div class="avviso" style="margin-top:12px">Per questo cliente manca il <strong>beneficiario DSA</strong>: in UE Meta lo richiede. <a href="{{ url_for('client_edit', key=key) }}">Compilalo nella scheda cliente</a>.</div>{% endif %}
+
+  <h2 style="margin-top:24px">Video</h2>
+  <label for="video_file">Carica dal computer</label>
+  <input type="file" id="video_file" name="video_file" accept="video/*">
+  <label for="video_url">oppure link diretto al video <span class="aiuto">(usato solo se non carichi un file)</span></label>
+  <input type="url" id="video_url" name="video_url" value="{{ form.video_url or '' }}" placeholder="https://.../video.mp4">
+
+  <h2 style="margin-top:24px">Testi</h2>
+  <label for="primary_text">Testo principale</label>
+  <textarea id="primary_text" name="primary_text" required>{{ form.primary_text }}</textarea>
+  <label for="headline">Titolo</label>
+  <input type="text" id="headline" name="headline" value="{{ form.headline }}" required>
+
+  <h2 style="margin-top:24px">Zona e budget</h2>
+  <div class="riga">
+    <div><label for="lat">Latitudine</label><input type="text" inputmode="decimal" id="lat" name="lat" value="{{ form.lat }}" required></div>
+    <div><label for="lng">Longitudine</label><input type="text" inputmode="decimal" id="lng" name="lng" value="{{ form.lng }}" required></div>
+    <div><label for="radius_km">Raggio (km)</label><input type="text" inputmode="decimal" id="radius_km" name="radius_km" value="{{ form.radius_km }}" required></div>
+    <div><label for="daily_budget_eur">Budget giornaliero (EUR)</label><input type="text" inputmode="decimal" id="daily_budget_eur" name="daily_budget_eur" value="{{ form.daily_budget_eur }}" required></div>
+  </div>
+  <div class="aiuto">Coordinate: su Google Maps fai clic destro sul punto e copia i due numeri.</div>
+
+  <input type="hidden" name="azione" id="azione" value="crea">
+  <div class="azioni"><button type="submit" id="go">Crea campagna in pausa</button><span class="muted" id="wait" style="display:none">Caricamento del video in corso, non chiudere la pagina...</span></div>
+  {% endif %}
+</form>
+<script>
+document.getElementById('f').addEventListener('submit', function () {
+  if (document.getElementById('azione').value === 'crea') {
+    document.getElementById('go').disabled = true; document.getElementById('wait').style.display = 'inline';
+  }
+});
+</script>
+{% endblock %}

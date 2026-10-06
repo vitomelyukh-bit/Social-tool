@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<form method="post" class="card">
+  <h1>{{ 'Modifica cliente' if key else 'Nuovo cliente' }}</h1>
+  {% for f, label, typ, req, help in fields %}
+    <label for="{{ f }}">{{ label }}{% if not req %} <span class="aiuto">(facoltativo)</span>{% endif %}</label>
+    {% if typ == 'textarea' %}
+      <textarea id="{{ f }}" name="{{ f }}">{{ client.get(f, '') }}</textarea>
+    {% else %}
+      <input id="{{ f }}" name="{{ f }}" type="{{ 'text' if typ == 'number' else typ }}" {% if typ == 'number' %}inputmode="decimal"{% endif %}
+             value="{{ client.get(f, '') }}" {% if req %}required{% endif %}>
+    {% endif %}
+    {% if help %}<div class="aiuto">{{ help }}</div>{% endif %}
+  {% endfor %}
+  <div class="azioni">
+    <button type="submit">Salva</button>
+    <a class="btn sec" href="{{ url_for('clients') }}">Annulla</a>
+  </div>
+</form>
+{% if key %}
+<form method="post" action="{{ url_for('client_delete', key=key) }}" onsubmit="return confirm('Eliminare questo cliente dalla lista? (Non tocca nulla su Meta)')">
+  <button class="rosso">Elimina cliente</button>
+</form>
+{% endif %}
+{% endblock %}

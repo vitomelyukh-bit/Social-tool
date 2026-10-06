@@ -1,0 +1,19 @@
+{
+  "esempio": {
+    "name": "Cliente esempio",
+    "ad_account_id": "1234567890",
+    "page_id": "1234567890",
+    "website": "https://esempio.it",
+    "privacy_url": "https://esempio.it/privacy",
+    "lat": 41.9028,
+    "lng": 12.4964,
+    "radius_km": 10,
+    "age_min": 25,
+    "daily_budget_eur": 15,
+    "video_url": "https://link-diretto-al-video.mp4",
+    "primary_text": "Testo principale dell'inserzione.",
+    "headline": "Titolo dell'inserzione",
+    "dsa_beneficiary": "Cliente Esempio Srl",
+    "dsa_payor": "Cliente Esempio Srl"
+  }
+}

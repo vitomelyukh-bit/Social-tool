@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<form method="get" class="card">
+  <h1>Report</h1>
+  <div class="riga">
+    <div>
+      <label for="periodo">Periodo</label>
+      <select id="periodo" name="periodo" onchange="document.getElementById('date').style.display = this.value=='custom' ? 'grid' : 'none'">
+        {% for v, l in periods %}<option value="{{ v }}" {{ 'selected' if v == period }}>{{ l }}</option>{% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="riga" id="date" style="display:{{ 'grid' if period == 'custom' else 'none' }}">
+    <div><label for="dal">Dal</label><input type="date" id="dal" name="dal" value="{{ since }}"></div>
+    <div><label for="al">Al</label><input type="date" id="al" name="al" value="{{ until }}"></div>
+  </div>
+  <label>Clienti</label>
+  <div class="scelta">
+    {% for k, c in clients.items() %}<label><input type="checkbox" name="cliente" value="{{ k }}" {{ 'checked' if k in selected }}> {{ c.name }}</label>{% endfor %}
+  </div>
+  <div class="azioni"><button name="vai" value="1">Mostra report</button></div>
+</form>
+{% if run and rows %}
+<div class="card">
+  <table>
+    <tr><th>Cliente</th><th class="num">Spesa</th><th class="num">Lead</th><th class="num">Costo per lead</th><th class="num">Impression</th></tr>
+    {% for r in rows %}
+      {% if r.error %}
+      <tr><td><strong>{{ r.name }}</strong></td><td colspan="4"><div class="errore" style="margin:0">{{ r.error.message }}<small>{{ r.error.detail }}</small></div></td></tr>
+      {% else %}
+      <tr>
+        <td><strong>{{ r.name }}</strong></td>
+        <td class="num">{{ r.spend|eur }} {{ r.currency }}</td>
+        <td class="num">{{ r.leads }}</td>
+        <td class="num">{{ r.cpl|eur }}{% if r.cpl is not none %} {{ r.currency }}{% endif %}</td>
+        <td class="num">{{ '{:,}'.format(r.impressions).replace(',', '.') }}</td>
+      </tr>
+      {% endif %}
+    {% endfor %}
+    {% if totals %}
+    <tr style="font-weight:700"><td>Totale</td><td class="num">{{ totals.spend|eur }} {{ totals.currency }}</td><td class="num">{{ totals.leads }}</td><td class="num">{{ totals.cpl|eur }}{% if totals.cpl is not none %} {{ totals.currency }}{% endif %}</td><td></td></tr>
+    {% endif %}
+  </table>
+  <p class="muted" style="margin-bottom:0">Lead = moduli inviati attribuiti alle inserzioni nel periodo. Una spesa a 0 significa nessuna inserzione attiva nel periodo.</p>
+</div>
+{% endif %}
+{% endblock %}

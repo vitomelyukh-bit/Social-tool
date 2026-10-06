@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Meta Tool{% endblock %}</title>
+<style>
+  :root { --blu:#1f5fd6; --bg:#f4f6fa; --bordo:#d8dde6; --testo:#1c2330; --grigio:#667085; --rosso:#b42318; --verde:#067647; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--testo); font-size:15px; }
+  nav { background:#fff; border-bottom:1px solid var(--bordo); padding:0 24px; display:flex; gap:4px; align-items:center; flex-wrap:wrap; }
+  nav .logo { font-weight:700; margin-right:20px; }
+  nav a { padding:16px 14px; text-decoration:none; color:var(--grigio); border-bottom:3px solid transparent; }
+  nav a.on { color:var(--blu); border-bottom-color:var(--blu); font-weight:600; }
+  main { max-width:980px; margin:24px auto; padding:0 16px; }
+  .card { background:#fff; border:1px solid var(--bordo); border-radius:10px; padding:20px 24px; margin-bottom:18px; }
+  h1 { font-size:22px; margin:0 0 16px; }
+  h2 { font-size:17px; margin:0 0 12px; }
+  label { display:block; font-weight:600; margin:14px 0 4px; }
+  .aiuto { color:var(--grigio); font-size:13px; font-weight:400; }
+  input[type=text], input[type=url], input[type=number], input[type=date], input[type=datetime-local], select, textarea {
+    width:100%; padding:9px 10px; border:1px solid var(--bordo); border-radius:7px; font-size:15px; font-family:inherit; background:#fff; }
+  textarea { min-height:90px; }
+  .riga { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:0 14px; }
+  button, .btn { display:inline-block; background:var(--blu); color:#fff; border:0; border-radius:7px; padding:10px 18px; font-size:15px; cursor:pointer; text-decoration:none; font-weight:600; }
+  .btn.sec, button.sec { background:#fff; color:var(--testo); border:1px solid var(--bordo); }
+  button.rosso { background:#fff; color:var(--rosso); border:1px solid #f1b8b2; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:10px 8px; border-bottom:1px solid var(--bordo); vertical-align:top; }
+  th { color:var(--grigio); font-weight:600; font-size:13px; text-transform:uppercase; }
+  td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+  .errore { background:#fef3f2; border:1px solid #fecdca; color:var(--rosso); border-radius:8px; padding:12px 16px; margin-bottom:16px; }
+  .errore small { display:block; color:#7a271a; margin-top:4px; }
+  .ok { background:#ecfdf3; border:1px solid #abefc6; color:var(--verde); border-radius:8px; padding:12px 16px; margin-bottom:16px; }
+  .avviso { background:#fffaeb; border:1px solid #fedf89; color:#93370d; border-radius:8px; padding:12px 16px; margin-bottom:16px; }
+  .muted { color:var(--grigio); }
+  .azioni { display:flex; gap:10px; align-items:center; margin-top:20px; flex-wrap:wrap; }
+  .scelta { display:flex; gap:18px; flex-wrap:wrap; }
+  .scelta label { font-weight:400; display:flex; gap:6px; align-items:center; margin:6px 0; }
+</style>
+</head>
+<body>
+<nav>
+  <span class="logo">Meta Tool</span>
+  {% set p = request.path %}
+  <a href="{{ url_for('clients') }}" class="{{ 'on' if p.startswith('/clienti') }}">Clienti</a>
+  <a href="{{ url_for('report') }}" class="{{ 'on' if p.startswith('/report') }}">Report</a>
+  <a href="{{ url_for('campaign') }}" class="{{ 'on' if p.startswith('/campagna') }}">Nuova campagna</a>
+  <a href="{{ url_for('publish') }}" class="{{ 'on' if p.startswith('/pubblica') }}">Pubblica post</a>
+</nav>
+<main>
+  {% with msgs = get_flashed_messages() %}{% for m in msgs %}<div class="ok">{{ m }}</div>{% endfor %}{% endwith %}
+  {% if errors %}<div class="errore">{% for e in errors %}<div>{{ e }}</div>{% endfor %}</div>{% endif %}
+  {% if error %}<div class="errore"><strong>{{ error.message }}</strong>{% if error.detail %}<small>{{ error.detail }}</small>{% endif %}</div>{% endif %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>
