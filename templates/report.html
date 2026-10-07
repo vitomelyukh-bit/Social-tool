@@ -1,47 +1,92 @@
 {% extends "base.html" %}
+{% from "_macros.html" import ic, meta, avatar %}
+{% block title %}Risultati · Social Tool{% endblock %}
+{% block css %}
+  .filtri h3 { margin: 0 0 10px; font-size: 14px; color: var(--grigio); font-weight: 600; }
+  .filtri .blocco + .blocco { margin-top: 18px; }
+  .risultato { display: grid; grid-template-columns: 240px repeat(3, 1fr); gap: 16px; align-items: center; }
+  @media (max-width: 860px) { .risultato { grid-template-columns: 1fr 1fr; } .risultato .chi { grid-column: 1 / -1; } }
+  .chi { display: flex; gap: 12px; align-items: center; }
+  .kpi { background: var(--bg); border-radius: 12px; padding: 14px 16px; }
+  .kpi .etichetta { color: var(--grigio); font-size: 13px; display: flex; gap: 6px; align-items: center; }
+  .kpi .etichetta .ic { width: 16px; height: 16px; }
+  .kpi .valore { font-size: 26px; font-weight: 700; letter-spacing: -.02em; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .kpi .valore small { font-size: 15px; font-weight: 600; color: var(--grigio); }
+  .totale { background: linear-gradient(135deg, #0866FF, #4a5cff); color: #fff; border: 0; }
+  .totale .kpi { background: rgba(255,255,255,.14); } .totale .kpi .etichetta, .totale .kpi .valore small, .totale .muted { color: rgba(255,255,255,.85); }
+{% endblock %}
 {% block content %}
-<form method="get" class="card">
-  <h1>Report</h1>
-  <div class="riga">
-    <div>
-      <label for="periodo">Periodo</label>
-      <select id="periodo" name="periodo" onchange="document.getElementById('date').style.display = this.value=='custom' ? 'grid' : 'none'">
-        {% for v, l in periods %}<option value="{{ v }}" {{ 'selected' if v == period }}>{{ l }}</option>{% endfor %}
-      </select>
+<div class="testata">
+  <div style="display:flex;gap:14px;align-items:center">
+    {{ meta('grande') }}
+    <div><h1>Risultati delle campagne</h1>
+    <p class="sottotitolo">Quanto è stato speso, quanti contatti sono arrivati e quanto costa ognuno.</p></div>
+  </div>
+</div>
+<style>.logo.grande{width:44px;height:44px}</style>
+
+<form method="get" class="card filtri" id="f">
+  <div class="blocco">
+    <h3>Periodo</h3>
+    <div class="scelte">
+      {% for v, l in periods %}
+      <label class="scelta" style="margin:0"><input type="radio" name="periodo" value="{{ v }}" {{ 'checked' if v == period }} onchange="cambia()"><span>{{ l }}</span></label>
+      {% endfor %}
+    </div>
+    <div class="griglia" id="date" style="max-width:420px;display:{{ 'grid' if period == 'custom' else 'none' }}">
+      <div><label for="dal">Dal</label><input type="date" id="dal" name="dal" value="{{ since }}"></div>
+      <div><label for="al">Al</label><input type="date" id="al" name="al" value="{{ until }}"></div>
     </div>
   </div>
-  <div class="riga" id="date" style="display:{{ 'grid' if period == 'custom' else 'none' }}">
-    <div><label for="dal">Dal</label><input type="date" id="dal" name="dal" value="{{ since }}"></div>
-    <div><label for="al">Al</label><input type="date" id="al" name="al" value="{{ until }}"></div>
+  {% if clients|length > 1 %}
+  <div class="blocco">
+    <h3>Clienti</h3>
+    <div class="scelte">
+      {% for k, c in clients.items() %}<label class="scelta" style="margin:0"><input type="checkbox" name="cliente" value="{{ k }}" {{ 'checked' if k in selected }}><span>{{ c.name }}</span></label>{% endfor %}
+    </div>
   </div>
-  <label>Clienti</label>
-  <div class="scelta">
-    {% for k, c in clients.items() %}<label><input type="checkbox" name="cliente" value="{{ k }}" {{ 'checked' if k in selected }}> {{ c.name }}</label>{% endfor %}
-  </div>
-  <div class="azioni"><button name="vai" value="1">Mostra report</button></div>
+  {% else %}{% for k in clients %}<input type="hidden" name="cliente" value="{{ k }}">{% endfor %}{% endif %}
+  <input type="hidden" name="vai" value="1">
+  <div class="azioni"><button type="submit">{{ ic('chart') }} Mostra risultati</button></div>
 </form>
+
 {% if run and rows %}
-<div class="card">
-  <table>
-    <tr><th>Cliente</th><th class="num">Spesa</th><th class="num">Lead</th><th class="num">Costo per lead</th><th class="num">Impression</th></tr>
-    {% for r in rows %}
-      {% if r.error %}
-      <tr><td><strong>{{ r.name }}</strong></td><td colspan="4"><div class="errore" style="margin:0">{{ r.error.message }}<small>{{ r.error.detail }}</small></div></td></tr>
-      {% else %}
-      <tr>
-        <td><strong>{{ r.name }}</strong></td>
-        <td class="num">{{ r.spend|eur }} {{ r.currency }}</td>
-        <td class="num">{{ r.leads }}</td>
-        <td class="num">{{ r.cpl|eur }}{% if r.cpl is not none %} {{ r.currency }}{% endif %}</td>
-        <td class="num">{{ '{:,}'.format(r.impressions).replace(',', '.') }}</td>
-      </tr>
-      {% endif %}
-    {% endfor %}
-    {% if totals %}
-    <tr style="font-weight:700"><td>Totale</td><td class="num">{{ totals.spend|eur }} {{ totals.currency }}</td><td class="num">{{ totals.leads }}</td><td class="num">{{ totals.cpl|eur }}{% if totals.cpl is not none %} {{ totals.currency }}{% endif %}</td><td></td></tr>
+  {% if totals %}
+  <div class="card totale" style="margin-top:16px">
+    <div class="risultato">
+      <div class="chi"><div><b style="font-size:17px">Totale</b><div class="muted piccolo">{{ rows|length }} clienti</div></div></div>
+      <div class="kpi"><div class="etichetta">{{ ic('wallet') }} Speso</div><div class="valore">{{ totals.spend|eur }} <small>{{ totals.currency or '€' }}</small></div></div>
+      <div class="kpi"><div class="etichetta">{{ ic('users') }} Contatti</div><div class="valore">{{ totals.leads }}</div></div>
+      <div class="kpi"><div class="etichetta">{{ ic('target') }} Costo per contatto</div><div class="valore">{{ totals.cpl|eur }}{% if totals.cpl is not none %} <small>{{ totals.currency or '€' }}</small>{% endif %}</div></div>
+    </div>
+  </div>
+  {% endif %}
+  {% for r in rows %}
+  <div class="card" style="margin-top:16px">
+    {% if r.error %}
+      <div class="chi" style="margin-bottom:12px">{{ avatar(r.name) }}<b>{{ r.name }}</b></div>
+      <div class="msg errore" style="margin:0">{{ ic('alert') }}<div><strong>{{ r.error.message }}</strong><small>{{ r.error.detail }}</small></div></div>
+    {% else %}
+    <div class="risultato">
+      <div class="chi">{{ avatar(r.name) }}<div><b>{{ r.name }}</b><div class="muted piccolo">{% if r.spend %}{{ '{:,}'.format(r.impressions).replace(',', '.') }} visualizzazioni{% else %}Nessuna spesa nel periodo{% endif %}</div></div></div>
+      <div class="kpi"><div class="etichetta">{{ ic('wallet') }} Speso</div><div class="valore">{{ r.spend|eur }} <small>{{ r.currency or '€' }}</small></div></div>
+      <div class="kpi"><div class="etichetta">{{ ic('users') }} Contatti</div><div class="valore">{{ r.leads }}</div></div>
+      <div class="kpi"><div class="etichetta">{{ ic('target') }} Costo per contatto</div><div class="valore">{{ r.cpl|eur }}{% if r.cpl is not none %} <small>{{ r.currency or '€' }}</small>{% endif %}</div></div>
+    </div>
     {% endif %}
-  </table>
-  <p class="muted" style="margin-bottom:0">Lead = moduli inviati attribuiti alle inserzioni nel periodo. Una spesa a 0 significa nessuna inserzione attiva nel periodo.</p>
-</div>
+  </div>
+  {% endfor %}
+  <p class="muted piccolo" style="margin-top:14px">"Contatti" sono i moduli compilati dalle persone che hanno visto le inserzioni nel periodo scelto.</p>
+{% elif not clients %}
+  <div class="card vuoto" style="margin-top:16px">{{ ic('user-plus') }}<p>Aggiungi un cliente per vedere i risultati.</p><a class="btn" href="{{ url_for('client_edit') }}">Aggiungi un cliente</a></div>
 {% endif %}
+{% endblock %}
+{% block scripts %}
+<script>
+function cambia() {
+  const custom = document.querySelector("input[name=periodo]:checked").value === "custom";
+  document.getElementById("date").style.display = custom ? "grid" : "none";
+  if (!custom) document.getElementById("f").submit();
+}
+</script>
 {% endblock %}

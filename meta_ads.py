@@ -26,14 +26,14 @@ load_dotenv(os.path.join(HERE, ".env"))
 
 import store  # noqa: E402  (dopo load_dotenv: legge le variabili all'import)
 
-# v24.0 della Marketing API scade il 6/10/2026; v26.0 e' la corrente (29/07/2026).
+# v24.0 della Marketing API scade il 6/10/2026; v26.0 è la corrente (29/07/2026).
 # Changelog: https://developers.facebook.com/docs/graph-api/changelog
 API_VERSION = "v26.0"
 BASE = f"https://graph.facebook.com/{API_VERSION}"
 
 
 class MetaError(Exception):
-    """Errore da mostrare all'utente: `message` in italiano, `detail` e' il testo originale di Meta."""
+    """Errore da mostrare all'utente: `message` in italiano, `detail` è il testo originale di Meta."""
 
     def __init__(self, message, detail=""):
         super().__init__(message)
@@ -62,23 +62,23 @@ _ERROR_CODES = {
     17: "Troppe richieste per questo account. Aspetta qualche minuto e riprova.",
     32: "Troppe richieste per questa pagina. Aspetta qualche minuto e riprova.",
     80004: "Troppe richieste all'account pubblicitario. Aspetta qualche minuto e riprova.",
-    190: "Il token di Meta non e' valido o e' scaduto. Va rigenerato in Business Manager (Utenti di sistema).",
+    190: "Il token di Meta non è valido o è scaduto. Va rigenerato in Business Manager (Utenti di sistema).",
     200: "Il token non ha i permessi necessari su questa risorsa (account pubblicitario, pagina o Instagram).",
     368: "Meta ha bloccato temporaneamente l'operazione per motivi di policy.",
     613: "Troppe richieste in poco tempo. Aspetta qualche minuto e riprova.",
-    2635: "La versione dell'API Meta usata non e' piu' supportata.",
+    2635: "La versione dell'API Meta usata non è più supportata.",
     9004: "Meta non riesce a scaricare il file dall'URL indicato: controlla che sia un link diretto e pubblico.",
-    9007: "Il contenuto Instagram non e' ancora pronto per la pubblicazione. Riprova tra poco.",
+    9007: "Il contenuto Instagram non è ancora pronto per la pubblicazione. Riprova tra poco.",
     36003: "Il formato o le proporzioni del file non sono accettati da Instagram.",
 }
 
 _SUBCODES = {
-    463: "Il token di Meta e' scaduto. Va rigenerato in Business Manager.",
-    467: "Il token di Meta non e' piu' valido. Va rigenerato in Business Manager.",
-    1487390: "Lo stesso nome e' gia' in uso: cambia il nome e riprova.",
+    463: "Il token di Meta è scaduto. Va rigenerato in Business Manager.",
+    467: "Il token di Meta non è più valido. Va rigenerato in Business Manager.",
+    1487390: "Lo stesso nome è già in uso: cambia il nome e riprova.",
     2207026: "Formato video non supportato da Instagram (serve MP4/MOV, H.264, max 15 minuti).",
     2207052: "Instagram non riesce a scaricare il file: serve un link diretto e pubblico.",
-    2207004: "L'immagine e' troppo grande per Instagram (max 8 MB).",
+    2207004: "L'immagine è troppo grande per Instagram (max 8 MB).",
     2207009: "Le proporzioni dell'immagine non sono accettate da Instagram (tra 4:5 e 1.91:1).",
     2207042: "Hai raggiunto il limite di pubblicazioni Instagram via API nelle ultime 24 ore.",
 }
@@ -96,7 +96,7 @@ def translate_error(err, path=""):
         msg = "Mancano beneficiario/pagante (obbligo DSA per le inserzioni in UE): compilali nella scheda cliente."
     if not msg:
         msg = "Meta ha rifiutato uno dei dati inviati." if code == 100 else "Meta ha restituito un errore."
-    # error_user_msg e' gia' pensato per l'utente finale (in italiano grazie a locale=it_IT)
+    # error_user_msg è già pensato per l'utente finale (in italiano grazie a locale=it_IT)
     detail_parts = [p for p in (user_title, user_msg) if p]
     detail = " - ".join(detail_parts) if detail_parts else raw
     if detail_parts and raw and raw not in detail:
@@ -163,14 +163,14 @@ def advance(s):
         else:
             s["waits"] = s.get("waits", 0) + 1
             if s["waits"] > s.get("max_waits", 150):
-                raise MetaError("Meta ci mette troppo a elaborare il file.", "Riprova piu' tardi.")
+                raise MetaError("Meta ci mette troppo a elaborare il file.", "Riprova più tardi.")
         if s["step"] >= len(steps):
             s["done"] = True
     except MetaError as e:
         s["error"] = {"message": e.message, "detail": e.detail}
         s["done"] = True
-    except Exception as e:  # noqa: BLE001 - mai lasciare un lavoro bloccato a meta'
-        s["error"] = {"message": "Si e' verificato un errore imprevisto.", "detail": f"{type(e).__name__}: {e}"}
+    except Exception as e:  # noqa: BLE001 - mai lasciare un lavoro bloccato a metà
+        s["error"] = {"message": "Si è verificato un errore imprevisto.", "detail": f"{type(e).__name__}: {e}"}
         s["done"] = True
     return s
 
@@ -209,7 +209,7 @@ def _act(s):
 
 
 def step_checks(s):
-    """Controlli prima di creare qualsiasi cosa, per non lasciare campagne a meta'."""
+    """Controlli prima di creare qualsiasi cosa, per non lasciare campagne a metà."""
     pid = s["c"]["page_id"]
     page = call("GET", pid, fields="name,leadgen_tos_accepted")
     if not page.get("leadgen_tos_accepted"):
@@ -246,7 +246,7 @@ def step_wait_video(s):
     vid = s["result"]["video_id"]
     status = call("GET", vid, fields="status")["status"]["video_status"]
     if status == "error":
-        raise MetaError("Meta non e' riuscita a elaborare il video.",
+        raise MetaError("Meta non è riuscita a elaborare il video.",
                         "Prova con un MP4 diverso o un link diretto al file.")
     if status != "ready":
         return False
@@ -421,7 +421,7 @@ def instagram_account(page_id):
     ig = call("GET", page_id, fields="instagram_business_account{id,username}").get("instagram_business_account")
     if not ig:
         raise MetaError("Non trovo un account Instagram professionale collegato a questa pagina Facebook.",
-                        "Controlla due cose: 1) l'account Instagram e' professionale e collegato alla pagina "
+                        "Controlla due cose: 1) l'account Instagram è professionale e collegato alla pagina "
                         "(Meta Business Suite > Impostazioni > Account Instagram); 2) l'utente di sistema del "
                         "token ha accesso all'account Instagram in Business Manager, con i permessi "
                         "instagram_basic e instagram_content_publish.")
@@ -480,7 +480,7 @@ def step_ig_wait(s):
     st = call("GET", s["ig_container"], fields="status_code,status")
     code = st.get("status_code")
     if code in ("ERROR", "EXPIRED"):
-        raise MetaError("Instagram non e' riuscito a elaborare il file.", st.get("status", ""))
+        raise MetaError("Instagram non è riuscito a elaborare il file.", st.get("status", ""))
     return code == "FINISHED"
 
 
@@ -488,12 +488,16 @@ def step_ig_publish(s):
     if not s["ig"]:
         return True
     if s.get("ig_check_only"):
-        s["log"].append("Instagram: file verificato e accettato. Verra' pubblicato automaticamente "
+        s["log"].append("Instagram: file verificato e accettato. Verrà pubblicato automaticamente "
                         "all'ora indicata.")
     else:
         s["result"]["instagram_id"] = call("POST", f"{s['ig_id']}/media_publish",
                                            creation_id=s["ig_container"])["id"]
         s["log"].append(f"Instagram: pubblicato ({s['result']['instagram_id']})")
+        try:
+            s["result"]["instagram_url"] = call("GET", s["result"]["instagram_id"], fields="permalink")["permalink"]
+        except (MetaError, KeyError):
+            pass
     if s.get("temp_photo"):
         try:
             call("DELETE", s["temp_photo"], token_=page_token(s["c"]["page_id"]))

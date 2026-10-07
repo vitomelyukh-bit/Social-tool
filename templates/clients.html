@@ -1,25 +1,45 @@
 {% extends "base.html" %}
+{% from "_macros.html" import ic, fb, ig, meta, avatar %}
+{% block title %}Clienti · Social Tool{% endblock %}
+{% block css %}
+  .clienti { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+  .cliente { display: flex; flex-direction: column; gap: 14px; }
+  .cliente .top { display: flex; gap: 12px; align-items: center; }
+  .cliente .top b { font-size: 16px; }
+  .dati { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; font-size: 14px; align-items: center; }
+  .dati .ic, .dati .logo { width: 17px; height: 17px; color: var(--grigio); }
+  .cliente .azioni { margin-top: auto; padding-top: 4px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .cliente .azioni .btn { padding: 8px 6px; }
+{% endblock %}
 {% block content %}
-{% if not has_token %}<div class="avviso"><strong>Token Meta mancante.</strong> Apri il file <code>.env</code> nella cartella del tool, inserisci <code>META_TOKEN=...</code> e riavvia.</div>{% endif %}
-<div class="card">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <h1 style="margin:0">Clienti</h1>
-    <a class="btn" href="{{ url_for('client_edit') }}">+ Aggiungi cliente</a>
-  </div>
-  {% if clients %}
-  <table>
-    <tr><th>Nome</th><th>Account pubblicitario</th><th>Pagina</th><th>Zona</th><th class="num">Budget/giorno</th><th></th></tr>
-    {% for k, c in clients.items() %}
-    <tr>
-      <td><strong>{{ c.name }}</strong></td>
-      <td>{{ c.ad_account_id }}</td>
-      <td>{{ c.page_id }}</td>
-      <td>{{ c.radius_km }} km da {{ c.lat }}, {{ c.lng }}</td>
-      <td class="num">{{ c.daily_budget_eur|eur }} EUR</td>
-      <td><a href="{{ url_for('client_edit', key=k) }}">Modifica</a></td>
-    </tr>
-    {% endfor %}
-  </table>
-  {% else %}<p class="muted">Nessun cliente. Aggiungine uno.</p>{% endif %}
+<div class="testata">
+  <div><h1>Clienti</h1><p class="sottotitolo">Ogni cliente ha la sua pagina Facebook, il suo account pubblicitario e le sue impostazioni.</p></div>
+  <a class="btn" href="{{ url_for('client_edit') }}">{{ ic('plus') }} Aggiungi cliente</a>
 </div>
+{% if not has_token %}<div class="msg avviso">{{ ic('alert') }}<div><strong>Manca il collegamento a Meta.</strong><small>Va impostato il token (variabile META_TOKEN).</small></div></div>{% endif %}
+
+{% if clients %}
+<div class="clienti">
+  {% for k, c in clients.items() %}
+  <div class="card cliente">
+    <div class="top">{{ avatar(c.name) }}<div style="flex:1;min-width:0"><b>{{ c.name }}</b><div class="muted piccolo">{{ c.website|replace('https://', '')|replace('http://', '') }}</div></div>
+      <a class="btn sec piccolo" href="{{ url_for('client_edit', key=k) }}" title="Modifica">{{ ic('edit') }}</a></div>
+    <div class="dati">
+      {{ fb() }}<span>Pagina <code>{{ c.page_id }}</code></span>
+      {{ meta() }}<span>Account <code>{{ c.ad_account_id }}</code></span>
+      {{ ic('pin') }}<span>{{ c.radius_km|int }} km di raggio</span>
+      {{ ic('wallet') }}<span>{{ c.daily_budget_eur|eur }} € al giorno</span>
+    </div>
+    {% if not c.get('dsa_beneficiary') %}<span class="tag giallo">{{ ic('alert') }} Scheda da completare</span>{% endif %}
+    <div class="azioni">
+      <a class="btn piccolo" href="{{ url_for('publish', cliente=k) }}">{{ ic('send') }} Post</a>
+      <a class="btn sec piccolo" href="{{ url_for('campaign', cliente=k) }}">{{ ic('megaphone') }} Campagna</a>
+      <a class="btn sec piccolo" href="{{ url_for('report', cliente=k) }}">{{ ic('chart') }} Risultati</a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card vuoto">{{ ic('user-plus') }}<h2 style="margin-top:8px">Nessun cliente ancora</h2><p>Aggiungi il primo cliente per iniziare a pubblicare e creare campagne.</p><a class="btn" href="{{ url_for('client_edit') }}">{{ ic('plus') }} Aggiungi cliente</a></div>
+{% endif %}
 {% endblock %}

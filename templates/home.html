@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% from "_macros.html" import ic, fb, ig, meta, avatar %}
+{% block css %}
+  .azioni-home { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 28px; }
+  .azione { display: flex; flex-direction: column; gap: 14px; text-decoration: none; color: var(--testo); background: var(--card); border: 1px solid var(--bordo); border-radius: 16px; padding: 22px; box-shadow: var(--ombra); transition: transform .15s, box-shadow .15s, border-color .15s; }
+  .azione:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(16,24,40,.08); border-color: var(--blu); }
+  .azione .loghi { display: flex; gap: 8px; align-items: center; height: 40px; }
+  .azione .loghi .logo { width: 36px; height: 36px; }
+  .azione .tondo { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; }
+  .azione .tondo .ic { width: 22px; height: 22px; }
+  .azione b { font-size: 17px; }
+  .azione p { margin: 0; color: var(--grigio); font-size: 14px; }
+  .azione .vai { margin-top: auto; color: var(--blu); font-weight: 600; font-size: 14px; }
+  .due { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 900px) { .due { grid-template-columns: 1fr; } }
+  .riga-lista { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--bordo); }
+  .riga-lista:first-of-type { border-top: 0; }
+  .riga-lista .testo { flex: 1; min-width: 0; }
+  .riga-lista .testo div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .riga-lista a { text-decoration: none; color: inherit; }
+{% endblock %}
+{% block content %}
+<div class="testata">
+  <div>
+    <h1>Ciao! Cosa vuoi fare?</h1>
+    <p class="sottotitolo">Scegli un'azione. Ti guidiamo passo per passo.</p>
+  </div>
+</div>
+
+<div class="azioni-home">
+  <a class="azione" href="{{ url_for('publish') }}">
+    <div class="loghi">{{ fb() }}{{ ig() }}</div>
+    <div><b>Pubblica un post</b><p>Foto o video su Facebook e Instagram, subito o programmato.</p></div>
+    <span class="vai">Inizia →</span>
+  </a>
+  <a class="azione" href="{{ url_for('campaign') }}">
+    <div class="loghi">{{ meta() }}</div>
+    <div><b>Crea una campagna</b><p>Inserzione video per raccogliere contatti. Viene creata in pausa.</p></div>
+    <span class="vai">Inizia →</span>
+  </a>
+  <a class="azione" href="{{ url_for('report') }}">
+    <div class="loghi"><span class="tondo" style="background:#ecfdf3;color:#079455">{{ ic('chart') }}</span></div>
+    <div><b>Guarda i risultati</b><p>Quanto si è speso, quanti contatti e quanto costa ognuno.</p></div>
+    <span class="vai">Apri →</span>
+  </a>
+  <a class="azione" href="{{ url_for('clients') }}">
+    <div class="loghi"><span class="tondo" style="background:#f4ebff;color:#7a3ff2">{{ ic('users') }}</span></div>
+    <div><b>Clienti</b><p>Aggiungi o modifica i clienti e le loro impostazioni.</p></div>
+    <span class="vai">Apri →</span>
+  </a>
+</div>
+
+<div class="due">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <h2 style="display:flex;gap:8px;align-items:center">{{ ic('calendar') }} Prossimi post programmati</h2>
+      <a href="{{ url_for('publish') }}#programmati" class="piccolo">Vedi tutti</a>
+    </div>
+    {% for q in upcoming %}
+      <div class="riga-lista">
+        {{ fb() if q.network == 'facebook' else ig() }}
+        <div class="testo"><div><b>{{ q.client_name }}</b> · {{ q.caption or '(senza testo)' }}</div><div class="muted piccolo">{{ q.when_txt }}</div></div>
+      </div>
+    {% else %}
+      <div class="vuoto">{{ ic('calendar') }}<p>Nessun post programmato.</p></div>
+    {% endfor %}
+  </div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <h2 style="display:flex;gap:8px;align-items:center">{{ ic('users') }} Clienti</h2>
+      <a href="{{ url_for('client_edit') }}" class="piccolo">+ Aggiungi</a>
+    </div>
+    {% for k, c in clients.items() %}
+      <div class="riga-lista"><a href="{{ url_for('client_edit', key=k) }}" style="display:flex;gap:12px;align-items:center;flex:1">
+        {{ avatar(c.name) }}<div class="testo"><div><b>{{ c.name }}</b></div><div class="muted piccolo">{{ c.radius_km|int }} km · {{ c.daily_budget_eur|eur }} €/giorno</div></div>
+      </a></div>
+    {% else %}
+      <div class="vuoto">{{ ic('user-plus') }}<p>Nessun cliente ancora.</p><a class="btn" href="{{ url_for('client_edit') }}">Aggiungi il primo cliente</a></div>
+    {% endfor %}
+  </div>
+</div>
+{% if not has_token %}<div class="msg avviso" style="margin-top:16px">{{ ic('alert') }}<div><strong>Manca il collegamento a Meta.</strong><small>Va impostato il token (variabile META_TOKEN). Chiedi a chi ha configurato il tool.</small></div></div>{% endif %}
+{% endblock %}

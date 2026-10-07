@@ -1,47 +1,113 @@
 {% extends "base.html" %}
+{% from "_macros.html" import ic, fb, ig, meta %}
+{% block title %}{{ 'Nuova campagna' if job.kind == 'campagna' else 'Pubblicazione' }} · Social Tool{% endblock %}
+{% block css %}
+  .lavoro { max-width: 680px; margin: 0 auto; }
+  .stato-grande { text-align: center; padding: 10px 0 20px; }
+  .stato-grande .cerchio { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; margin: 0 auto 14px; }
+  .stato-grande .cerchio .ic { width: 32px; height: 32px; }
+  .cerchio.in-corso { background: var(--blu-chiaro); color: var(--blu); }
+  .cerchio.fatto { background: var(--verde-bg); color: var(--verde); }
+  .cerchio.errore { background: var(--rosso-bg); color: var(--rosso); }
+  .stato-grande h1 { font-size: 22px; }
+  .barra { height: 8px; background: var(--bg); border-radius: 99px; overflow: hidden; margin: 6px 0 22px; }
+  .barra div { height: 100%; background: var(--blu); border-radius: 99px; transition: width .4s; }
+  .passi { list-style: none; margin: 0; padding: 0; }
+  .passi li { display: flex; align-items: center; gap: 12px; padding: 10px 0; color: var(--grigio-chiaro); }
+  .passi li .stato { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; border: 2px solid var(--bordo); flex: none; }
+  .passi li .stato .ic { width: 15px; height: 15px; }
+  .passi li .logo { width: 20px; height: 20px; opacity: .4; }
+  .passi li.fatto { color: var(--testo); } .passi li.fatto .stato { background: var(--verde); border-color: var(--verde); color: #fff; } .passi li.fatto .logo { opacity: 1; }
+  .passi li.ora { color: var(--testo); font-weight: 600; } .passi li.ora .stato { border-color: var(--blu); color: var(--blu); } .passi li.ora .logo { opacity: 1; }
+  .passi li.ko { color: var(--rosso); font-weight: 600; } .passi li.ko .stato { background: var(--rosso); border-color: var(--rosso); color: #fff; }
+  .link-risultati { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; }
+  .link-risultati .btn { justify-content: flex-start; }
+  .btn .logo-fb, .btn .logo-meta { color: #fff; }
+  .btn.sec .logo-fb { color: #0866FF; }
+{% endblock %}
 {% block content %}
-<div class="card">
-  <h1>{{ 'Nuova campagna' if job.kind == 'campagna' else 'Pubblicazione post' }}</h1>
-  <div id="stato"></div>
-  <ol id="log"></ol>
-  <div id="link"></div>
-  <div class="azioni"><a class="btn sec" href="{{ url_for('campaign' if job.kind == 'campagna' else 'publish') }}">Torna al modulo</a></div>
+<div class="lavoro">
+  <div class="card">
+    <div class="stato-grande" id="stato"></div>
+    <div class="barra"><div id="barra" style="width:0"></div></div>
+    <ol class="passi" id="passi"></ol>
+    <div id="errore"></div>
+    <div class="link-risultati" id="link"></div>
+    <div class="azioni" style="justify-content:center">
+      <a class="btn sec" href="{{ url_for('campaign' if job.kind == 'campagna' else 'publish') }}">{{ ic('plus') }} {{ 'Nuova campagna' if job.kind == 'campagna' else 'Nuovo post' }}</a>
+      <a class="btn sec" href="{{ url_for('home') }}">{{ ic('home') }} Home</a>
+    </div>
+  </div>
 </div>
+{% endblock %}
+{% block scripts %}
 <script>
 const URL_AVANZA = "{{ url_for('job_advance', jid=job.id) }}", URL_ELIMINA = "{{ url_for('job_cleanup', jid=job.id) }}";
+const LOGHI = {fb: '{{ fb()|replace("\n", " ") }}', ig: '{{ ig()|replace("\n", " ") }}', meta: '{{ meta()|replace("\n", " ") }}'};
+const IC = {check: '{{ ic("check") }}', x: '{{ ic("x") }}', loader: '{{ ic("loader", "spin") }}', alert: '{{ ic("alert") }}',
+            ext: '{{ ic("ext") }}', trash: '{{ ic("trash") }}'};
+const KIND = "{{ job.kind }}";
 function esc(t) { const d = document.createElement("div"); d.textContent = t || ""; return d.innerHTML; }
 function linkify(t) { return esc(t).replace(/https:\/\/[^\s<]+/g, function (u) { return '<a target="_blank" href="' + u + '">' + u + '</a>'; }); }
+
 function render(j) {
-  document.getElementById("log").innerHTML = (j.log || []).map(function (l) { return "<li>" + esc(l) + "</li>"; }).join("");
-  const st = document.getElementById("stato"), link = document.getElementById("link");
-  if (j.error) st.innerHTML = '<div class="errore"><strong>' + esc(j.error.message) + '</strong><small>' + linkify(j.error.detail) + '</small></div>';
-  else if (j.done) st.innerHTML = '<div class="ok"><strong>Fatto!</strong></div>';
-  else st.innerHTML = '<div class="avviso">In corso... non chiudere questa pagina. Con un video può richiedere qualche minuto.</div>';
-  let h = "";
-  if (j.result && j.result.ads_manager_url) {
-    h += '<p><a class="btn" target="_blank" href="' + esc(j.result.ads_manager_url) + '">Apri in Gestione inserzioni</a></p>';
-    h += j.error ? '<p class="muted">La campagna è stata creata solo in parte (in pausa). Eliminala prima di riprovare:</p>' +
-                   '<p><button class="rosso" onclick="cleanup(this)">Elimina la parte creata</button></p>'
-                 : (j.done ? '<p class="muted">Tutto è in PAUSA. Controlla anteprima, modulo e budget, poi attiva da Gestione inserzioni.</p>' : "");
+  const steps = j.steps || [], cur = j.step || 0, err = !!j.error;
+  let fatti = 0;
+  document.getElementById("passi").innerHTML = steps.map(function (s) {
+    let cls = "", icona = "";
+    if (s.i < cur || (j.done && !err)) { cls = "fatto"; icona = IC.check; fatti++; }
+    else if (s.i === cur && err) { cls = "ko"; icona = IC.x; }
+    else if (s.i === cur && !j.done) { cls = "ora"; icona = IC.loader; }
+    return '<li class="' + cls + '"><span class="stato">' + icona + '</span>' + LOGHI[s.net] + '<span>' + esc(s.label) + '</span></li>';
+  }).join("");
+  const barra = document.getElementById("barra");
+  barra.style.width = (steps.length ? Math.round(100 * (j.done && !err ? 1 : fatti / steps.length)) : 0) + "%";
+  barra.style.background = err ? "var(--rosso)" : (j.done ? "var(--verde)" : "var(--blu)");
+
+  let titolo, sotto, cerchio, icona;
+  const prog = j.scheduled_ts && j.when_txt;
+  if (err) { cerchio = "errore"; icona = IC.alert; titolo = "Qualcosa non è andato"; sotto = "Qui sotto trovi cosa è successo e come risolvere."; }
+  else if (j.done) {
+    cerchio = "fatto"; icona = IC.check;
+    if (KIND === "campagna") { titolo = "Campagna creata!"; sotto = "È tutto in pausa: controllala e attivala da Gestione inserzioni."; }
+    else if (prog) { titolo = "Post programmato!"; sotto = "Uscirà " + j.when_txt.toLowerCase() + "."; }
+    else { titolo = "Post pubblicato!"; sotto = "È già online."; }
+  } else {
+    cerchio = "in-corso"; icona = IC.loader;
+    titolo = KIND === "campagna" ? "Sto creando la campagna…" : (prog ? "Sto programmando il post…" : "Sto pubblicando…");
+    sotto = "Non chiudere questa pagina. Con un video può volerci qualche minuto.";
   }
-  if (j.cleaned) h += '<div class="ok">Parte creata eliminata: puoi riprovare.</div>';
-  link.innerHTML = h;
+  document.getElementById("stato").innerHTML = '<div class="cerchio ' + cerchio + '">' + icona + '</div><h1>' + titolo + '</h1><p class="muted" style="margin:6px 0 0">' + sotto + '</p>';
+
+  document.getElementById("errore").innerHTML = err ? '<div class="msg errore" style="margin-top:16px">' + IC.alert + '<div><strong>' + esc(j.error.message) + '</strong><small>' + linkify(j.error.detail) + '</small></div></div>' : "";
+
+  const r = j.result || {}; let h = "";
+  if (r.ads_manager_url) {
+    h += '<a class="btn" target="_blank" href="' + esc(r.ads_manager_url) + '">' + LOGHI.meta + ' Apri in Gestione inserzioni ' + IC.ext + '</a>';
+    if (err) h += '<p class="muted piccolo" style="margin:4px 0 0">La campagna è stata creata solo in parte (in pausa). Eliminala prima di riprovare:</p><button class="rosso" onclick="pulisci(this)">' + IC.trash + ' Elimina la parte creata</button>';
+  }
+  if (r.facebook_id && !prog) h += '<a class="btn sec" target="_blank" href="https://www.facebook.com/' + esc(r.facebook_id) + '">' + LOGHI.fb + ' Vedi il post su Facebook ' + IC.ext + '</a>';
+  if (r.instagram_url) h += '<a class="btn sec" target="_blank" href="' + esc(r.instagram_url) + '">' + LOGHI.ig + ' Vedi il post su Instagram ' + IC.ext + '</a>';
+  if (j.cleaned) h += '<div class="msg ok">' + IC.check + '<div>Parte creata eliminata da Meta: puoi riprovare.</div></div>';
+  document.getElementById("link").innerHTML = h;
 }
-async function cleanup(btn) {
+async function pulisci(btn) {
   if (!confirm("Eliminare da Meta la campagna creata a metà?")) return;
   btn.disabled = true;
   const r = await fetch(URL_ELIMINA, {method: "POST"}); const j = await r.json();
-  if (j.log) render(Object.assign(j, {error: j.error})); else { alert(j.error.message + "\n" + j.error.detail); btn.disabled = false; }
+  if (j.steps) render(j); else { alert(j.error.message + "\n" + j.error.detail); btn.disabled = false; }
 }
+let ultimo = {{ job|tojson }};
 async function tick() {
   try {
     const r = await fetch(URL_AVANZA, {method: "POST"});
     const j = await r.json();
-    if (j.log) render(j); else if (j.error) render({error: j.error, done: true});
-    if (!j.done && !(!j.log && j.error)) setTimeout(tick, 4000);
+    if (j.steps) { ultimo = j; render(j); }
+    else if (j.error) render(Object.assign({}, ultimo, {error: j.error, done: true}));
+    if (!(j.done || (!j.steps && j.error))) setTimeout(tick, 4000);
   } catch (e) { setTimeout(tick, 8000); }
 }
-render({{ job|tojson }});
+render(ultimo);
 {% if not job.done %}tick();{% endif %}
 </script>
 {% endblock %}

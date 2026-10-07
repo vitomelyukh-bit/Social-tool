@@ -1,44 +1,139 @@
 {% extends "base.html" %}
+{% from "_macros.html" import ic, fb, ig, meta, avatar %}
+{% block title %}Nuova campagna · Social Tool{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+{% endblock %}
+{% block css %}
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 20px; align-items: start; }
+  @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } .lato { position: static; } }
+  .lato { position: sticky; top: 20px; }
+  .sezione { padding-bottom: 22px; margin-bottom: 22px; border-bottom: 1px solid var(--bordo); }
+  .sezione:last-of-type { border-bottom: 0; }
+  .ad { border: 1px solid var(--bordo); border-radius: 12px; overflow: hidden; background: #fff; font-size: 14px; }
+  .ad-testa { display: flex; gap: 10px; align-items: center; padding: 12px; }
+  .ad-testa .avatar { width: 36px; height: 36px; border-radius: 50%; font-size: 13px; }
+  .ad-testo { padding: 0 12px 12px; white-space: pre-wrap; word-break: break-word; }
+  .ad-media { background: #eef1f6; aspect-ratio: 9 / 12; display: grid; place-items: center; color: var(--grigio-chiaro); }
+  .ad-media video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .ad-piede { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #f7f8fa; }
+  .ad-piede b { flex: 1; font-size: 14px; }
+  .ad-piede span { background: #e4e6eb; border-radius: 6px; padding: 7px 12px; font-weight: 600; font-size: 13px; }
+  .cosa-succede { margin: 0; padding-left: 20px; color: var(--grigio); font-size: 14px; } .cosa-succede li { margin: 4px 0; }
+{% endblock %}
 {% block content %}
-<form method="post" class="card" id="f">
-  <h1>Nuova campagna lead</h1>
-  <p class="muted">Crea campagna, gruppo di inserzioni, modulo contatti (nome, telefono, email) e inserzione video. <strong>Tutto viene creato in PAUSA</strong>: lo attivi tu da Gestione inserzioni dopo averlo controllato.</p>
-  {% if not clients %}<div class="avviso">Prima aggiungi un cliente.</div>{% else %}
-  <label for="cliente">Cliente</label>
-  <select id="cliente" name="cliente" onchange="document.getElementById('azione').value='cambia'; this.form.dataset.skip='1'; this.form.submit()">
-    {% for k, c in clients.items() %}<option value="{{ k }}" {{ 'selected' if k == key }}>{{ c.name }}</option>{% endfor %}
-  </select>
-  {% if not client.get('dsa_beneficiary') %}<div class="avviso" style="margin-top:12px">Per questo cliente manca il <strong>beneficiario DSA</strong>: in UE Meta lo richiede. <a href="{{ url_for('client_edit', key=key) }}">Compilalo nella scheda cliente</a>.</div>{% endif %}
-
-  <h2 style="margin-top:24px">Video</h2>
-  <label for="video_file">Carica dal computer</label>
-  {% if blob_enabled %}<input type="file" id="video_file" accept="video/mp4,video/quicktime">
-  {% else %}<div class="aiuto">Caricamento dal computer non disponibile: manca l'archivio file (Vercel Blob).</div>{% endif %}
-  <label for="video_url">oppure link diretto al video <span class="aiuto">(usato solo se non carichi un file)</span></label>
-  <input type="url" id="video_url" name="video_url" value="{{ form.video_url or '' }}" placeholder="https://.../video.mp4">
-
-  <h2 style="margin-top:24px">Testi</h2>
-  <label for="primary_text">Testo principale</label>
-  <textarea id="primary_text" name="primary_text" required>{{ form.primary_text }}</textarea>
-  <label for="headline">Titolo</label>
-  <input type="text" id="headline" name="headline" value="{{ form.headline }}" required>
-
-  <h2 style="margin-top:24px">Zona e budget</h2>
-  <div class="riga">
-    <div><label for="lat">Latitudine</label><input type="text" inputmode="decimal" id="lat" name="lat" value="{{ form.lat }}" required></div>
-    <div><label for="lng">Longitudine</label><input type="text" inputmode="decimal" id="lng" name="lng" value="{{ form.lng }}" required></div>
-    <div><label for="radius_km">Raggio (km)</label><input type="text" inputmode="decimal" id="radius_km" name="radius_km" value="{{ form.radius_km }}" required></div>
-    <div><label for="daily_budget_eur">Budget giornaliero (EUR)</label><input type="text" inputmode="decimal" id="daily_budget_eur" name="daily_budget_eur" value="{{ form.daily_budget_eur }}" required></div>
+<div class="testata">
+  <div style="display:flex;gap:14px;align-items:center">
+    {{ meta('grande') }}
+    <div><h1>Nuova campagna contatti</h1>
+    <p class="sottotitolo">Un'inserzione video con modulo per raccogliere nome, telefono ed email.</p></div>
   </div>
-  <div class="aiuto">Coordinate: su Google Maps fai clic destro sul punto e copia i due numeri.</div>
+</div>
+<style>.logo.grande{width:44px;height:44px}</style>
+
+{% if not clients %}
+<div class="card vuoto">{{ ic('user-plus') }}<p>Per creare una campagna serve almeno un cliente.</p><a class="btn" href="{{ url_for('client_edit') }}">Aggiungi un cliente</a></div>
+{% else %}
+<div class="msg info">{{ ic('info') }}<div><strong>Tranquillo: non parte nulla da solo.</strong><small>Tutto viene creato in PAUSA. Lo controlli e lo attivi tu da Gestione inserzioni di Meta.</small></div></div>
+
+<div class="layout">
+<form method="post" class="card" id="f">
+  <div class="sezione">
+    <div class="passo"><span class="passo-n">1</span><div><h3>Per quale cliente?</h3><p>Zona, budget e testi si compilano con i dati salvati del cliente: puoi cambiarli qui.</p></div></div>
+    <div class="scelte">
+      {% for k, c in clients.items() %}
+      <label class="scelta" style="margin:0"><input type="radio" name="cliente" value="{{ k }}" {{ 'checked' if k == key }} onchange="cambiaCliente()"><span>{{ c.name }}</span></label>
+      {% endfor %}
+    </div>
+    {% if not client.get('dsa_beneficiary') %}
+    <div class="msg avviso" style="margin:14px 0 0">{{ ic('alert') }}<div><strong>Manca un dato obbligatorio per l'Europa.</strong><small>Nella scheda del cliente va indicato chi beneficia delle inserzioni (es. la ragione sociale). <a href="{{ url_for('client_edit', key=key) }}">Completa la scheda</a></small></div></div>
+    {% endif %}
+  </div>
+
+  <div class="sezione">
+    <div class="passo"><span class="passo-n">2</span><div><h3>Il video</h3><p>Meglio verticale (9:16), MP4, meno di 1 minuto.</p></div></div>
+    {% if blob_enabled %}
+    <div class="drop" id="drop">
+      {{ ic('upload') }}<b>Trascina qui il video</b><span class="muted piccolo">oppure clicca per sceglierlo dal computer · MP4, MOV</span>
+      <input type="file" id="video_file" accept="video/mp4,video/quicktime">
+    </div>
+    <div class="anteprima-file" id="drop-anteprima"><div class="media"></div><div style="flex:1;min-width:0"><div class="nome"></div><div class="muted piccolo peso"></div></div><button type="button" class="sec piccolo cambia">Cambia</button></div>
+    {% endif %}
+    <details class="link-diretto" {{ 'open' if form.video_url or not blob_enabled }}>
+      <summary>Hai già il link al video? Incollalo qui</summary>
+      <input type="url" id="video_url" name="video_url" value="{{ form.video_url or '' }}" placeholder="https://…/video.mp4" style="margin-top:8px">
+    </details>
+  </div>
+
+  <div class="sezione">
+    <div class="passo"><span class="passo-n">3</span><div><h3>I testi dell'inserzione</h3></div></div>
+    <label for="primary_text" style="margin-top:0">Testo principale</label>
+    <textarea id="primary_text" name="primary_text" required placeholder="Es. Cerchi casa a Roma? Lasciaci il tuo numero, ti richiamiamo noi.">{{ form.primary_text }}</textarea>
+    <label for="headline">Titolo <span class="aiuto">(breve, compare sotto il video)</span></label>
+    <input type="text" id="headline" name="headline" value="{{ form.headline }}" required maxlength="80" placeholder="Es. Valutazione gratuita">
+  </div>
+
+  <div class="sezione">
+    <div class="passo"><span class="passo-n">4</span><div><h3>Dove mostrarla</h3><p>Cerca un indirizzo o clicca sulla mappa, poi scegli il raggio.</p></div></div>
+    {% with zona = form %}{% include "_mappa.html" %}{% endwith %}
+  </div>
+
+  <div class="sezione">
+    <div class="passo"><span class="passo-n">5</span><div><h3>Quanto spendere</h3></div></div>
+    <div class="griglia" style="max-width:420px">
+      <div><label for="daily_budget_eur" style="margin-top:0">Budget al giorno</label><div class="campo-euro"><input type="text" inputmode="decimal" id="daily_budget_eur" name="daily_budget_eur" value="{{ form.daily_budget_eur }}" required></div></div>
+    </div>
+    <div class="aiuto" id="mese"></div>
+  </div>
 
   <input type="hidden" name="azione" id="azione" value="crea">
-  <div class="azioni"><button type="submit" id="go">Crea campagna in pausa</button><span class="muted" id="wait" style="display:none"></span></div>
+  <div class="azioni">
+    <button type="submit" id="go" class="grande">{{ ic('megaphone') }} Crea campagna in pausa</button>
+    <span class="muted" id="wait" style="display:none"></span>
+  </div>
   <progress id="bar" max="1" value="0" style="display:none"></progress>
-  {% endif %}
 </form>
-{% if clients %}<script>
-document.getElementById("cliente").addEventListener("change", function () { document.getElementById("f").dataset.skip = "1"; });
-wireUpload("f", "video_file", "video_url", function () { return "video"; });
-</script>{% endif %}
+
+<div class="lato">
+  <div class="card" style="padding:18px">
+    <div class="muted piccolo" style="margin-bottom:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Anteprima inserzione</div>
+    <div class="ad">
+      <div class="ad-testa">{{ avatar(client.name) }}<div><b>{{ client.name }}</b><div class="muted piccolo">Sponsorizzato</div></div></div>
+      <div class="ad-testo" id="pv-testo"></div>
+      <div class="ad-media" id="pv-media">{{ ic('play') }}</div>
+      <div class="ad-piede"><b id="pv-titolo"></b><span>Iscriviti</span></div>
+    </div>
+    <h3 style="margin:18px 0 6px">Cosa verrà creato</h3>
+    <ol class="cosa-succede">
+      <li>Campagna "Contatti"</li>
+      <li>Pubblico nella zona scelta, dai {{ client.get('age_min', 25)|int }} anni in su</li>
+      <li>Modulo: nome, telefono, email</li>
+      <li>Inserzione con il tuo video</li>
+    </ol>
+  </div>
+</div>
+</div>
+{% endif %}
 {% endblock %}
+
+{% block scripts %}{% if clients %}
+<script>
+const $ = function (id) { return document.getElementById(id); };
+function cambiaCliente() { $("azione").value = "cambia"; $("f").dataset.skip = "1"; $("f").submit(); }
+
+// Anteprima testi e budget
+function aggiorna() {
+  $("pv-testo").textContent = $("primary_text").value || "Il testo principale apparirà qui.";
+  $("pv-titolo").textContent = $("headline").value || "Titolo";
+  const b = parseFloat(($("daily_budget_eur").value || "").replace(",", "."));
+  $("mese").textContent = b > 0 ? "Circa " + Math.round(b * 30.4).toLocaleString("it-IT") + " € al mese se resta attiva tutto il mese." : "";
+}
+["primary_text", "headline", "daily_budget_eur"].forEach(function (id) { $(id).addEventListener("input", aggiorna); });
+aggiorna();
+
+setupDrop("drop", function (file, url) { $("pv-media").innerHTML = file ? '<video src="' + url + '" muted autoplay loop playsinline></video>' : '{{ ic("play") }}'; });
+$("video_url").addEventListener("change", function () { const u = this.value.trim(); if (u) $("pv-media").innerHTML = '<video src="' + u + '" muted autoplay loop playsinline></video>'; });
+wireUpload("f", "video_file", "video_url", function () { return "video"; });
+</script>
+{% endif %}{% endblock %}

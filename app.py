@@ -49,19 +49,19 @@ app.config.update(SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_HTTPONLY=True,
 
 CLIENT_FIELDS = [
     # (chiave, etichetta, tipo, obbligatorio, aiuto)
-    ("name", "Nome cliente", "text", True, ""),
+    ("name", "Nome del cliente", "text", True, ""),
     ("ad_account_id", "ID account pubblicitario", "text", True, "Solo numeri, senza 'act_'"),
     ("page_id", "ID pagina Facebook", "text", True, ""),
     ("website", "Sito web", "url", True, "Dove va l'utente dopo aver inviato il modulo"),
-    ("privacy_url", "Link privacy policy", "url", True, "Obbligatorio per i moduli lead"),
-    ("lat", "Latitudine centro zona", "number", True, "Es. 41.9028 (da Google Maps: tasto destro sul punto)"),
-    ("lng", "Longitudine centro zona", "number", True, "Es. 12.4964"),
+    ("privacy_url", "Pagina della privacy", "url", True, "Obbligatorio per i moduli lead"),
+    ("lat", "Zona sulla mappa", "number", True, "Es. 41.9028 (da Google Maps: tasto destro sul punto)"),
+    ("lng", "Zona sulla mappa", "number", True, "Es. 12.4964"),
     ("radius_km", "Raggio (km)", "number", True, "Da 1 a 80"),
-    ("age_min", "Eta' minima", "number", False, "Predefinita 25"),
-    ("daily_budget_eur", "Budget giornaliero (EUR)", "number", True, ""),
-    ("dsa_beneficiary", "Beneficiario inserzioni (DSA)", "text", False,
+    ("age_min", "Età minima", "number", False, "Predefinita 25"),
+    ("daily_budget_eur", "Budget al giorno", "number", True, ""),
+    ("dsa_beneficiary", "Chi beneficia delle inserzioni", "text", False,
      "Chi trae vantaggio dalle inserzioni, es. ragione sociale del cliente. Obbligatorio in UE."),
-    ("dsa_payor", "Chi paga le inserzioni (DSA)", "text", False, "Se vuoto = beneficiario"),
+    ("dsa_payor", "Chi paga le inserzioni", "text", False, "Se vuoto = beneficiario"),
     ("video_url", "Video predefinito (URL)", "url", False, "Link diretto al file .mp4"),
     ("primary_text", "Testo principale predefinito", "textarea", False, ""),
     ("headline", "Titolo predefinito", "text", False, ""),
@@ -88,7 +88,7 @@ def show_error(e):
         log.warning("MetaError: %s | %s", e.message, e.detail)
         return {"message": e.message, "detail": e.detail}
     log.error("Errore imprevisto: %s", traceback.format_exc())
-    return {"message": "Si e' verificato un errore imprevisto.",
+    return {"message": "Si è verificato un errore imprevisto.",
             "detail": f"{type(e).__name__}: {e}"}
 
 
@@ -115,7 +115,7 @@ def require_login():
         return None
     if not APP_PASSWORD:
         if ON_VERCEL:  # online senza password = chiunque col link userebbe il token
-            return render_template("error.html", error={
+            return render_template("error.html", hide_nav=True, error={
                 "message": "Accesso non configurato.",
                 "detail": "Imposta la variabile APP_PASSWORD su Vercel e rifai il deploy."}), 503
         return None
@@ -137,7 +137,7 @@ def login():
             return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for("home"))
         time.sleep(1)
         error = {"message": "Password errata.", "detail": ""}
-    return render_template("login.html", error=error)
+    return render_template("login.html", error=error, hide_nav=True)
 
 
 @app.route("/logout")
@@ -172,8 +172,34 @@ def start_job(state):
     return state["id"]
 
 
+CAMPAIGN_LABELS = ["Controllo della pagina Facebook", "Invio del video a Meta", "Elaborazione del video",
+                   "Creazione della campagna", "Pubblico, zona e budget", "Modulo contatti",
+                   "Creatività (video e testi)", "Inserzione"]
+
+
+def job_steps(s):
+    """Passi da mostrare nella pagina di avanzamento: (etichetta, social, indice del passo)."""
+    if s["kind"] == "campagna":
+        return [{"label": lab, "net": "meta", "i": i} for i, lab in enumerate(CAMPAIGN_LABELS)]
+    out = []
+    if s.get("fb"):
+        out.append({"label": "Programmazione su Facebook" if s.get("scheduled_ts") else "Pubblicazione su Facebook",
+                    "net": "fb", "i": 0})
+    if s.get("ig"):
+        out += [{"label": "Invio del file a Instagram", "net": "ig", "i": 1},
+                {"label": "Instagram elabora il file", "net": "ig", "i": 2},
+                {"label": "Verifica completata, in coda" if s.get("ig_check_only") else "Pubblicazione su Instagram",
+                 "net": "ig", "i": 3}]
+    return out
+
+
 def public_job(s):
-    return {k: s.get(k) for k in ("id", "kind", "log", "done", "error", "result", "cleaned")}
+    out = {k: s.get(k) for k in ("id", "kind", "log", "done", "error", "result", "cleaned", "step",
+                                  "scheduled_ts", "ig_check_only")}
+    out["steps"] = job_steps(s)
+    if s.get("scheduled_ts"):
+        out["when_txt"] = format_dt(s["scheduled_ts"])
+    return out
 
 
 @app.route("/lavoro/<jid>")
@@ -221,9 +247,9 @@ def job_advance(jid):
 
 @app.route("/lavoro/<jid>/elimina", methods=["POST"])
 def job_cleanup(jid):
-    """Elimina la campagna creata a meta' da un lavoro andato in errore."""
+    """Elimina la campagna creata a metà da un lavoro andato in errore."""
     if not store.lock(f"lock:job:{jid}", 90):
-        return jsonify({"error": {"message": "Operazione gia' in corso, riprova tra poco.", "detail": ""}}), 409
+        return jsonify({"error": {"message": "Operazione già in corso, riprova tra poco.", "detail": ""}}), 409
     try:
         s = store.get(f"job:{jid}") or abort(404)
         if s["kind"] != "campagna" or not s.get("error"):
@@ -241,9 +267,38 @@ def job_cleanup(jid):
 
 # --- Home / Clienti ----------------------------------------------------------
 
+def schedule_view(items):
+    """Prepara la lista dei post programmati per la pagina."""
+    now = time.time()
+    out = []
+    for q in sorted(items, key=lambda x: x["when"], reverse=True):
+        q = dict(q)
+        q["when_txt"] = format_dt(q["when"])
+        q.setdefault("network", "instagram")
+        if q["status"] == "programmato" and q["when"] < now:
+            q["status"] = "pubblicato"
+        q["can_cancel"] = q["status"] in ("in attesa", "programmato")
+        out.append(q)
+    return out
+
+
+MESI = ["gen", "feb", "mar", "apr", "mag", "giu", "lug", "ago", "set", "ott", "nov", "dic"]
+
+
+def format_dt(ts):
+    d = datetime.fromtimestamp(ts, TZ)
+    oggi = datetime.now(TZ).date()
+    giorno = ("Oggi" if d.date() == oggi else "Domani" if d.date() == oggi + timedelta(days=1)
+              else f"{d.day} {MESI[d.month - 1]}")
+    return f"{giorno}, {d.strftime('%H:%M')}"
+
+
 @app.route("/")
 def home():
-    return redirect(url_for("clients"))
+    upcoming = [q for q in schedule_view(load_schedule()) if q["can_cancel"]]
+    upcoming.sort(key=lambda q: q["when"])
+    return render_template("home.html", clients=meta_ads.load_clients(), upcoming=upcoming[:5],
+                           has_token=bool(os.environ.get("META_TOKEN")))
 
 
 @app.route("/clienti")
@@ -271,7 +326,7 @@ def client_edit(key=None):
             v = request.form.get(fkey, "").strip()
             if not v:
                 if required:
-                    errors.append(f"'{label}' e' obbligatorio.")
+                    errors.append(f"'{label}' è obbligatorio.")
                 continue
             if fkey in NUMERIC:
                 try:
@@ -317,12 +372,12 @@ def report():
     until = request.args.get("al", "")
     selected = request.args.getlist("cliente") or list(all_clients)
     rows, error = [], None
-    run = "vai" in request.args
+    run = bool(all_clients)  # i risultati si caricano subito, senza premere nulla
     if run:
         if period == "custom" and not (since and until):
             error = {"message": "Per le date personalizzate indica sia 'dal' che 'al'.", "detail": ""}
         elif period == "custom" and since > until:
-            error = {"message": "La data 'dal' e' successiva alla data 'al'.", "detail": ""}
+            error = {"message": "La data 'dal' è successiva alla data 'al'.", "detail": ""}
         else:
             for k in selected:
                 if k not in all_clients:
@@ -371,7 +426,7 @@ def campaign():
             errors.append("Serve un video: carica un file oppure incolla un link.")
         for k, label in [("primary_text", "Testo"), ("headline", "Titolo")]:
             if not form[k]:
-                errors.append(f"'{label}' e' obbligatorio.")
+                errors.append(f"'{label}' è obbligatorio.")
             overrides[k] = form[k]
         for k, label in [("lat", "Latitudine"), ("lng", "Longitudine"), ("radius_km", "Raggio"),
                          ("daily_budget_eur", "Budget giornaliero")]:
@@ -383,7 +438,7 @@ def campaign():
             if not 1 <= overrides["radius_km"] <= 80:
                 errors.append("Il raggio deve essere tra 1 e 80 km.")
             if overrides["daily_budget_eur"] < 1:
-                errors.append("Il budget giornaliero e' troppo basso.")
+                errors.append("Il budget giornaliero è troppo basso.")
         if not errors:
             jid = start_job(meta_ads.new_campaign(key, overrides))
             return redirect(url_for("job_page", jid=jid))
@@ -417,7 +472,7 @@ def process_schedule(budget_s=240):
     supportano la programmazione). Chiamato dal cron o dal thread locale."""
     t0 = time.time()
     if not store.lock("lock:tick", budget_s + 30):
-        return {"skipped": "tick gia' in corso"}
+        return {"skipped": "tick già in corso"}
     processed = []
     try:
         for it in load_schedule():
@@ -452,7 +507,7 @@ def process_schedule(budget_s=240):
 
 
 def cleanup_blobs(max_age_h=48):
-    """Elimina i file caricati piu' vecchi di 48 ore, tranne quelli di post ancora in attesa."""
+    """Elimina i file caricati più vecchi di 48 ore, tranne quelli di post ancora in attesa."""
     if not blob.enabled():
         return 0
     keep = {it["media_url"] for it in load_schedule() if it["status"] == "in attesa"}
@@ -475,7 +530,7 @@ def cron_tick():
 
 
 def parse_local_dt(value):
-    """Il campo datetime-local e' in ora italiana, a prescindere dal fuso del server."""
+    """Il campo datetime-local è in ora italiana, a prescindere dal fuso del server."""
     return datetime.fromisoformat(value).replace(tzinfo=TZ).timestamp()
 
 
@@ -489,6 +544,8 @@ def publish():
         form = {k: request.form.get(k, "").strip() for k in ("message", "media_url", "kind", "when")}
         form["fb"] = request.form.get("fb", "")
         form["ig"] = request.form.get("ig", "")
+        if form["kind"] not in ("image", "video"):
+            form["kind"] = "video" if re.search(r"\.(mp4|mov)(\?|$)", form["media_url"], re.I) else "image"
         kind = form["kind"] if form["media_url"] else None
         if not (form["fb"] or form["ig"]):
             errors.append("Scegli almeno una destinazione: Facebook e/o Instagram.")
@@ -504,23 +561,17 @@ def publish():
                 errors.append("Data/ora di programmazione non valida.")
             else:
                 delta = ts - time.time()
-                # la doc dice 30 giorni, ma per le foto Meta rifiuta gia' a 29 (verificato 10/2026)
+                # la doc dice 30 giorni, ma per le foto Meta rifiuta già a 29 (verificato 10/2026)
                 if form["fb"] and not (600 <= delta <= 28 * 86400):
                     errors.append("Facebook accetta programmazioni tra 10 minuti e 28 giorni da adesso.")
                 elif delta < 60:
-                    errors.append("L'orario di programmazione e' nel passato.")
+                    errors.append("L'orario di programmazione è nel passato.")
         if not errors:
             s = meta_ads.new_post(key, form["message"], kind, form["media_url"] or None,
                                   fb=bool(form["fb"]), ig=bool(form["ig"]), scheduled_ts=ts,
                                   ig_check_only=bool(ts))
             return redirect(url_for("job_page", jid=start_job(s)))
-    queue = sorted(load_schedule(), key=lambda x: x["when"], reverse=True)[:30]
-    for q in queue:
-        q["when_txt"] = datetime.fromtimestamp(q["when"], TZ).strftime("%d/%m/%Y %H:%M")
-        q.setdefault("network", "instagram")
-        if q["status"] == "programmato" and q["when"] < time.time():
-            q["status"] = "pubblicato"
-        q["can_cancel"] = q["status"] in ("in attesa", "programmato")
+    queue = schedule_view(load_schedule())[:30]
     min_when = (datetime.now(TZ) + timedelta(minutes=15)).strftime("%Y-%m-%dT%H:%M")
     return render_template("publish.html", clients=all_clients, key=key, form=form, errors=errors,
                            queue=queue, min_when=min_when, local=not ON_VERCEL)
@@ -532,7 +583,7 @@ def publish_cancel(sid):
     if item.get("network") == "facebook":
         if item["status"] != "programmato" or item["when"] < time.time():
             abort(400)
-        try:  # su Facebook il post programmato esiste gia': va eliminato da Meta
+        try:  # su Facebook il post programmato esiste già: va eliminato da Meta
             c = meta_ads.load_client(item["client"])
             meta_ads.call("DELETE", item["fb_id"], token_=meta_ads.page_token(c["page_id"]))
         except MetaError as e:

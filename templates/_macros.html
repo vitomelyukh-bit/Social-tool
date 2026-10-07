@@ -1,0 +1,8 @@
+{% macro ic(name, cls='') -%}<svg class="ic {{ cls }}" aria-hidden="true"><use href="#i-{{ name }}"/></svg>{%- endmacro %}
+{% macro fb(cls='') -%}<svg class="logo logo-fb {{ cls }}" role="img" aria-label="Facebook"><use href="#b-fb"/></svg>{%- endmacro %}
+{% macro ig(cls='') -%}<svg class="logo logo-ig {{ cls }}" role="img" aria-label="Instagram"><use href="#b-ig"/></svg>{%- endmacro %}
+{% macro meta(cls='') -%}<svg class="logo logo-meta {{ cls }}" role="img" aria-label="Meta"><use href="#b-meta"/></svg>{%- endmacro %}
+{% macro avatar(name) -%}
+  {%- set parts = (name or '?').split() -%}
+  <span class="avatar">{{ (parts[0][0] ~ (parts[1][0] if parts|length > 1 else ''))|upper }}</span>
+{%- endmacro %}

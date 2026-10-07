@@ -1,63 +1,185 @@
 {% extends "base.html" %}
+{% from "_macros.html" import ic, fb, ig, avatar %}
+{% block title %}Pubblica post · Social Tool{% endblock %}
+{% block css %}
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; align-items: start; }
+  @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } .lato { position: static; } }
+  .lato { position: sticky; top: 20px; }
+  .sezione { padding-bottom: 22px; margin-bottom: 22px; border-bottom: 1px solid var(--bordo); }
+  .sezione:last-of-type { border-bottom: 0; margin-bottom: 0; padding-bottom: 0; }
+  .post { border: 1px solid var(--bordo); border-radius: 12px; overflow: hidden; background: #fff; }
+  .post-testa { display: flex; gap: 10px; align-items: center; padding: 12px; }
+  .post-testa .avatar { width: 36px; height: 36px; border-radius: 50%; font-size: 13px; }
+  .post-testo { padding: 0 12px 12px; white-space: pre-wrap; word-break: break-word; font-size: 14px; }
+  .post-media { background: #eef1f6; aspect-ratio: 4 / 5; display: grid; place-items: center; color: var(--grigio-chiaro); }
+  .post-media img, .post-media video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .quando-campi { display: none; margin-top: 12px; }
+  .contatore { text-align: right; font-size: 12px; color: var(--grigio); margin-top: 4px; }
+  .tabella-prog { width: 100%; border-collapse: collapse; }
+  .tabella-prog td { padding: 12px 8px; border-top: 1px solid var(--bordo); vertical-align: middle; }
+{% endblock %}
 {% block content %}
+<div class="testata">
+  <div>
+    <h1>Pubblica un post</h1>
+    <p class="sottotitolo">Su Facebook e Instagram insieme, subito o all'ora che scegli.</p>
+  </div>
+</div>
+
+{% if not clients %}
+<div class="card vuoto">{{ ic('user-plus') }}<p>Per pubblicare serve almeno un cliente.</p><a class="btn" href="{{ url_for('client_edit') }}">Aggiungi un cliente</a></div>
+{% else %}
+<div class="layout">
 <form method="post" class="card" id="f">
-  <h1>Pubblica post</h1>
-  {% if not clients %}<div class="avviso">Prima aggiungi un cliente.</div>{% else %}
-  <label for="cliente">Cliente</label>
-  <select id="cliente" name="cliente">
-    {% for k, c in clients.items() %}<option value="{{ k }}" {{ 'selected' if k == key }}>{{ c.name }}</option>{% endfor %}
-  </select>
-
-  <label>Dove pubblicare</label>
-  <div class="scelta">
-    <label><input type="checkbox" name="fb" value="1" {{ 'checked' if form.fb }}> Pagina Facebook</label>
-    <label><input type="checkbox" name="ig" value="1" {{ 'checked' if form.ig }}> Instagram collegato</label>
+  <div class="sezione">
+    <div class="passo"><span class="passo-n">1</span><div><h3>Per quale cliente?</h3></div></div>
+    <div class="scelte">
+      {% for k, c in clients.items() %}
+      <label class="scelta" style="margin:0"><input type="radio" name="cliente" value="{{ k }}" data-nome="{{ c.name }}" {{ 'checked' if k == key }}><span>{{ c.name }}</span></label>
+      {% endfor %}
+    </div>
   </div>
 
-  <label for="message">Testo</label>
-  <textarea id="message" name="message">{{ form.message }}</textarea>
-
-  <label>Tipo di contenuto</label>
-  <div class="scelta">
-    <label><input type="radio" name="kind" value="image" {{ 'checked' if form.kind != 'video' }}> Immagine</label>
-    <label><input type="radio" name="kind" value="video" {{ 'checked' if form.kind == 'video' }}> Video (su Instagram diventa un Reel)</label>
+  <div class="sezione">
+    <div class="passo"><span class="passo-n">2</span><div><h3>Dove vuoi pubblicarlo?</h3><p>Puoi scegliere uno o entrambi.</p></div></div>
+    <div class="dest">
+      <label class="scelta" style="margin:0"><input type="checkbox" name="fb" value="1" {{ 'checked' if form.fb }}><span>{{ fb() }}<b>Facebook</b><small>Sulla pagina del cliente</small></span></label>
+      <label class="scelta" style="margin:0"><input type="checkbox" name="ig" value="1" {{ 'checked' if form.ig }}><span>{{ ig() }}<b>Instagram</b><small>Sul profilo collegato alla pagina</small></span></label>
+    </div>
   </div>
-  <label for="media_file">Carica dal computer</label>
-  {% if blob_enabled %}<input type="file" id="media_file" accept="image/jpeg,image/png,video/mp4,video/quicktime">
-  {% else %}<div class="aiuto">Caricamento dal computer non disponibile: manca l'archivio file (Vercel Blob).</div>{% endif %}
-  <label for="media_url">oppure link diretto al file</label>
-  <input type="url" id="media_url" name="media_url" value="{{ form.media_url }}">
 
-  <label for="when">Programma per <span class="aiuto">(lascia vuoto per pubblicare subito)</span></label>
-  <input type="datetime-local" id="when" name="when" value="{{ form.when }}" min="{{ min_when }}" style="max-width:260px">
-  <div class="aiuto">Ora italiana. Facebook: tra 10 minuti e 28 giorni. Instagram: pubblicato automaticamente all'ora indicata{% if local %} <strong>solo se il Meta Tool e' acceso</strong> su questo computer{% else %} (puo' partire con qualche minuto di ritardo){% endif %}.</div>
+  <div class="sezione">
+    <div class="passo"><span class="passo-n">3</span><div><h3>Foto o video</h3><p>Su Instagram i video diventano Reel. Per Instagram serve sempre una foto o un video.</p></div></div>
+    {% if blob_enabled %}
+    <div class="drop" id="drop">
+      {{ ic('upload') }}<b>Trascina qui la foto o il video</b><span class="muted piccolo">oppure clicca per sceglierlo dal computer · JPG, PNG, MP4, MOV</span>
+      <input type="file" id="media_file" accept="image/jpeg,image/png,video/mp4,video/quicktime">
+    </div>
+    <div class="anteprima-file" id="drop-anteprima"><div class="media"></div><div style="flex:1;min-width:0"><div class="nome"></div><div class="muted piccolo peso"></div></div><button type="button" class="sec piccolo cambia">Cambia</button></div>
+    {% endif %}
+    <details class="link-diretto" {{ 'open' if form.media_url or not blob_enabled }}>
+      <summary>Hai già il link al file? Incollalo qui</summary>
+      <input type="url" id="media_url" name="media_url" value="{{ form.media_url }}" placeholder="https://…/foto.jpg" style="margin-top:8px">
+    </details>
+    <input type="hidden" name="kind" id="kind" value="{{ form.kind or 'image' }}">
+  </div>
+
+  <div class="sezione">
+    <div class="passo"><span class="passo-n">4</span><div><h3>Scrivi il testo</h3></div></div>
+    <textarea id="message" name="message" maxlength="2200" placeholder="Scrivi qui il testo del post…">{{ form.message }}</textarea>
+    <div class="contatore"><span id="conta">0</span> / 2200</div>
+  </div>
+
+  <div class="sezione">
+    <div class="passo"><span class="passo-n">5</span><div><h3>Quando?</h3></div></div>
+    <div class="scelte">
+      <label class="scelta" style="margin:0"><input type="radio" name="quando" value="ora" {{ 'checked' if not form.when }}><span>{{ ic('zap') }} Adesso</span></label>
+      <label class="scelta" style="margin:0"><input type="radio" name="quando" value="dopo" {{ 'checked' if form.when }}><span>{{ ic('calendar') }} Programma</span></label>
+    </div>
+    <div class="quando-campi" id="quando-campi">
+      <div class="griglia" style="max-width:420px">
+        <div><label for="giorno">Giorno</label><input type="date" id="giorno"></div>
+        <div><label for="ora">Ora</label><input type="time" id="ora" step="300"></div>
+      </div>
+      <div class="aiuto">Ora italiana. Facebook accetta da 10 minuti a 28 giorni da adesso. Su Instagram il post parte da solo all'ora scelta{% if local %}, solo se il tool è acceso su questo computer{% else %} (a volte con qualche minuto di ritardo){% endif %}.</div>
+    </div>
+    <input type="hidden" name="when" id="when" value="{{ form.when }}">
+  </div>
 
   <input type="hidden" name="azione" value="pubblica">
-  <div class="azioni"><button type="submit" id="go">Pubblica</button><span class="muted" id="wait" style="display:none"></span></div>
+  <div class="azioni">
+    <button type="submit" id="go" class="grande">{{ ic('send') }} <span id="go-testo">Pubblica adesso</span></button>
+    <span class="muted" id="wait" style="display:none"></span>
+  </div>
   <progress id="bar" max="1" value="0" style="display:none"></progress>
-  {% endif %}
 </form>
+
+<div class="lato">
+  <div class="card" style="padding:18px">
+    <div class="muted piccolo" style="margin-bottom:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em">Anteprima</div>
+    <div class="post">
+      <div class="post-testa">{{ avatar(clients[key].name if key in clients else '?') }}<div><b id="pv-nome" style="font-size:14px">{{ clients[key].name if key in clients else '' }}</b><div class="muted piccolo" id="pv-quando">Adesso</div></div></div>
+      <div class="post-testo" id="pv-testo"><span class="muted">Il testo del post apparirà qui.</span></div>
+      <div class="post-media" id="pv-media">{{ ic('image') }}</div>
+    </div>
+    <div class="muted piccolo" style="margin-top:10px;display:flex;gap:8px;align-items:center" id="pv-dove"></div>
+  </div>
+</div>
+</div>
+
 {% if queue %}
-<div class="card">
-  <h2>Post programmati</h2>
-  <table>
-    <tr><th>Quando</th><th>Dove</th><th>Cliente</th><th>Testo</th><th>Stato</th><th></th></tr>
+<div class="card" id="programmati" style="margin-top:20px">
+  <h2 style="display:flex;gap:8px;align-items:center;margin-bottom:8px">{{ ic('calendar') }} Post programmati</h2>
+  <table class="tabella-prog">
     {% for q in queue %}
     <tr>
-      <td>{{ q.when_txt }}</td><td>{{ 'Facebook' if q.network == 'facebook' else 'Instagram' }}</td><td>{{ q.client_name }}</td><td>{{ q.caption[:80] }}</td>
-      <td>{{ q.status }}{% if q.error %}<div class="errore" style="margin:4px 0 0">{{ q.error }}</div>{% endif %}</td>
-      <td>{% if q.can_cancel %}<form method="post" action="{{ url_for('publish_cancel', sid=q.id) }}" onsubmit="return confirm('Annullare questo post programmato?')"><button class="rosso">Annulla</button></form>{% endif %}</td>
+      <td style="width:34px">{{ fb() if q.network == 'facebook' else ig() }}</td>
+      <td style="white-space:nowrap"><b>{{ q.when_txt }}</b><div class="muted piccolo">{{ q.client_name }}</div></td>
+      <td style="width:100%" class="muted">{{ (q.caption or '(senza testo)')[:90] }}</td>
+      <td style="white-space:nowrap">
+        {% set colori = {'in attesa': 'blu', 'programmato': 'blu', 'pubblicato': 'verde', 'errore': 'rosso', 'annullato': ''} %}
+        <span class="tag {{ colori.get(q.status, '') }}">{{ 'programmato' if q.status == 'in attesa' else q.status }}</span>
+        {% if q.error %}<div class="msg errore piccolo" style="margin:6px 0 0;padding:8px 10px">{{ q.error }}</div>{% endif %}
+      </td>
+      <td>{% if q.can_cancel %}<form method="post" action="{{ url_for('publish_cancel', sid=q.id) }}" onsubmit="return confirm('Annullare questo post programmato?')"><button class="rosso piccolo">{{ ic('x') }} Annulla</button></form>{% endif %}</td>
     </tr>
     {% endfor %}
   </table>
 </div>
 {% endif %}
-{% if clients %}<script>
-const mf = document.getElementById("media_file");
-if (mf) mf.addEventListener("change", function () {
-  const t = mf.files.length ? mf.files[0].type : "";
-  if (t) document.querySelector("input[name=kind][value=" + (t.startsWith("video") ? "video" : "image") + "]").checked = true;
-});
-wireUpload("f", "media_file", "media_url", function () { return document.querySelector("input[name=kind]:checked").value; });
-</script>{% endif %}
+{% endif %}
 {% endblock %}
+
+{% block scripts %}{% if clients %}
+<script>
+const $ = function (id) { return document.getElementById(id); };
+const f = $("f"), fbBox = f.querySelector("input[name=fb]"), igBox = f.querySelector("input[name=ig]");
+const LOGO_FB = '{{ fb()|replace("\n", " ") }}', LOGO_IG = '{{ ig()|replace("\n", " ") }}';
+
+function aggiorna() {
+  const ora = f.querySelector("input[name=quando]:checked").value === "ora";
+  $("quando-campi").style.display = ora ? "none" : "block";
+  $("when").value = (!ora && $("giorno").value && $("ora").value) ? $("giorno").value + "T" + $("ora").value : "";
+  const dove = [fbBox.checked ? "Facebook" : null, igBox.checked ? "Instagram" : null].filter(Boolean);
+  let quando = "adesso";
+  if (!ora && $("when").value) {
+    const d = new Date($("when").value);
+    quando = "il " + d.toLocaleDateString("it-IT", {day: "numeric", month: "long"}) + " alle " + $("ora").value;
+  }
+  $("go-testo").textContent = (ora ? "Pubblica " : "Programma ") + (ora ? "adesso" : (quando === "adesso" ? "" : quando)) +
+    (dove.length ? " su " + dove.join(" e ") : "");
+  $("pv-quando").textContent = ora ? "Adesso" : (quando === "adesso" ? "Programmato" : quando.replace(/^il /, ""));
+  $("pv-dove").innerHTML = (fbBox.checked ? LOGO_FB : "") + (igBox.checked ? LOGO_IG : "") + (dove.length ? "Verrà pubblicato su " + dove.join(" e ") : "Scegli dove pubblicare");
+  const t = $("message").value; $("conta").textContent = t.length;
+  $("pv-testo").innerHTML = ""; if (t) $("pv-testo").textContent = t; else $("pv-testo").innerHTML = '<span class="muted">Il testo del post apparirà qui.</span>';
+}
+f.querySelectorAll("input[name=quando], input[name=fb], input[name=ig]").forEach(function (el) { el.addEventListener("change", aggiorna); });
+["giorno", "ora", "message"].forEach(function (id) { $(id).addEventListener("input", aggiorna); });
+f.querySelectorAll("input[name=cliente]").forEach(function (el) { el.addEventListener("change", function () {
+  $("pv-nome").textContent = el.dataset.nome;
+  const p = el.dataset.nome.split(" "); document.querySelector(".post-testa .avatar").textContent = (p[0][0] + (p[1] ? p[1][0] : "")).toUpperCase();
+}); });
+
+// data/ora iniziali (ora locale): tra un'ora, minuti a zero
+(function () {
+  function ymd(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+  const w = $("when").value;
+  if (w) { $("giorno").value = w.slice(0, 10); $("ora").value = w.slice(11, 16); }
+  else { const d = new Date(Date.now() + 2 * 3600000); d.setMinutes(0); $("giorno").value = ymd(d); $("ora").value = String(d.getHours()).padStart(2, "0") + ":00"; }
+  $("giorno").min = ymd(new Date());
+})();
+
+function mostraMedia(url, video) {
+  $("pv-media").innerHTML = url ? (video ? '<video src="' + url + '" muted autoplay loop playsinline></video>' : '<img src="' + url + '" alt="">') : '{{ ic("image") }}';
+}
+setupDrop("drop", function (file, url, video) { if (file) $("kind").value = video ? "video" : "image"; mostraMedia(file ? url : null, video); });
+$("media_url").addEventListener("change", function () {
+  const u = this.value.trim(), video = /\.(mp4|mov)(\?|$)/i.test(u);
+  if (u) { $("kind").value = video ? "video" : "image"; mostraMedia(u, video); }
+});
+if ($("media_url").value) $("media_url").dispatchEvent(new Event("change"));
+f.addEventListener("submit", aggiorna, true);
+aggiorna();
+wireUpload("f", "media_file", "media_url", function () { return $("kind").value; });
+</script>
+{% endif %}{% endblock %}

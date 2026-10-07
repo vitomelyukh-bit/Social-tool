@@ -1,2 +1,10 @@
 {% extends "base.html" %}
-{% block content %}<div class="card"><a class="btn sec" href="javascript:history.back()">Torna indietro</a></div>{% endblock %}
+{% from "_macros.html" import ic %}
+{% block content %}
+<div class="card vuoto" style="max-width:560px;margin:40px auto">
+  <div class="azioni" style="justify-content:center">
+    <a class="btn sec" href="javascript:history.back()">{{ ic('back') }} Torna indietro</a>
+    <a class="btn" href="{{ url_for('home') }}">{{ ic('home') }} Home</a>
+  </div>
+</div>
+{% endblock %}

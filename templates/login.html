@@ -1,9 +1,23 @@
 {% extends "base.html" %}
+{% from "_macros.html" import ic, fb, ig, meta %}
+{% block title %}Accedi · Social Tool{% endblock %}
+{% block css %}
+  main { display: grid; place-items: center; min-height: 100vh; padding: 20px; }
+  .accesso { width: 100%; max-width: 400px; margin: 0 auto; text-align: center; padding: 36px 32px; }
+  .accesso .loghi { display: flex; gap: 10px; justify-content: center; margin-bottom: 18px; }
+  .accesso .loghi .logo { width: 40px; height: 40px; }
+  .accesso form { text-align: left; }
+  .accesso button { width: 100%; margin-top: 18px; }
+{% endblock %}
 {% block content %}
-<form method="post" class="card" style="max-width:380px;margin:40px auto">
-  <h1>Accedi</h1>
-  <label for="password">Password</label>
-  <input type="password" id="password" name="password" autofocus required style="width:100%;padding:9px 10px;border:1px solid var(--bordo);border-radius:7px;font-size:15px">
-  <div class="azioni"><button type="submit">Entra</button></div>
-</form>
+<div class="card accesso">
+  <div class="loghi">{{ fb() }}{{ ig() }}{{ meta() }}</div>
+  <h1>Social Tool</h1>
+  <p class="sottotitolo">Entra per pubblicare post e gestire le campagne.</p>
+  <form method="post">
+    <label for="password">Password</label>
+    <input type="password" id="password" name="password" autofocus required autocomplete="current-password">
+    <button type="submit" class="grande">Entra</button>
+  </form>
+</div>
 {% endblock %}

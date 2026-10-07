@@ -1,25 +1,91 @@
 {% extends "base.html" %}
+{% from "_macros.html" import ic, fb, ig, meta, avatar %}
+{% block title %}{{ 'Modifica cliente' if key else 'Nuovo cliente' }} · Social Tool{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+{% endblock %}
+{% block css %}
+  .modulo { max-width: 760px; }
+  .modulo .card { margin-bottom: 16px; }
+  .sez-titolo { display: flex; gap: 12px; align-items: center; margin-bottom: 4px; }
+  .sez-titolo .logo, .sez-titolo .ic { width: 26px; height: 26px; }
+  .sez-titolo .ic { color: var(--blu); }
+  details.card summary { cursor: pointer; list-style: none; }
+  details.card summary::-webkit-details-marker { display: none; }
+{% endblock %}
 {% block content %}
-<form method="post" class="card">
-  <h1>{{ 'Modifica cliente' if key else 'Nuovo cliente' }}</h1>
-  {% for f, label, typ, req, help in fields %}
-    <label for="{{ f }}">{{ label }}{% if not req %} <span class="aiuto">(facoltativo)</span>{% endif %}</label>
-    {% if typ == 'textarea' %}
-      <textarea id="{{ f }}" name="{{ f }}">{{ client.get(f, '') }}</textarea>
-    {% else %}
-      <input id="{{ f }}" name="{{ f }}" type="{{ 'text' if typ == 'number' else typ }}" {% if typ == 'number' %}inputmode="decimal"{% endif %}
-             value="{{ client.get(f, '') }}" {% if req %}required{% endif %}>
-    {% endif %}
-    {% if help %}<div class="aiuto">{{ help }}</div>{% endif %}
-  {% endfor %}
-  <div class="azioni">
-    <button type="submit">Salva</button>
-    <a class="btn sec" href="{{ url_for('clients') }}">Annulla</a>
+<a href="{{ url_for('clients') }}" class="muted" style="display:inline-flex;gap:6px;align-items:center;text-decoration:none;margin-bottom:14px">{{ ic('back') }} Tutti i clienti</a>
+<div class="testata">
+  <div style="display:flex;gap:14px;align-items:center">
+    {% if key %}{{ avatar(client.get('name')) }}{% endif %}
+    <div><h1>{{ client.get('name') if key else 'Nuovo cliente' }}</h1>
+    <p class="sottotitolo">{{ 'Modifica le impostazioni del cliente.' if key else 'Compila i dati: li userai per post e campagne.' }}</p></div>
+  </div>
+</div>
+
+<form method="post" class="modulo" id="f">
+  <div class="card">
+    <div class="sez-titolo">{{ ic('users') }}<h2>Il cliente</h2></div>
+    <label for="name">Nome del cliente</label>
+    <input type="text" id="name" name="name" value="{{ client.get('name', '') }}" required placeholder="Es. Immobiliare Rossi">
+    <label for="website">Sito web</label>
+    <input type="url" id="website" name="website" value="{{ client.get('website', '') }}" required placeholder="https://…">
+    <div class="aiuto">Dopo aver lasciato i contatti, le persone vengono mandate qui.</div>
+    <label for="privacy_url">Pagina della privacy</label>
+    <input type="url" id="privacy_url" name="privacy_url" value="{{ client.get('privacy_url', '') }}" required placeholder="https://…/privacy">
+    <div class="aiuto">Obbligatoria per i moduli contatti di Meta.</div>
+  </div>
+
+  <div class="card">
+    <div class="sez-titolo">{{ meta() }}<h2>Collegamento a Meta</h2></div>
+    <p class="muted piccolo" style="margin:4px 0 0">Li trovi in Business Manager (business.facebook.com) → Impostazioni.</p>
+    <div class="griglia">
+      <div><label for="page_id" style="display:flex;gap:6px;align-items:center">{{ fb() }} ID pagina Facebook</label>
+        <input type="text" id="page_id" name="page_id" value="{{ client.get('page_id', '') }}" required inputmode="numeric" placeholder="Es. 1856222951366963">
+        <div class="aiuto">Account → Pagine → seleziona la pagina.</div></div>
+      <div><label for="ad_account_id" style="display:flex;gap:6px;align-items:center">{{ meta() }} ID account pubblicitario</label>
+        <input type="text" id="ad_account_id" name="ad_account_id" value="{{ client.get('ad_account_id', '') }}" required placeholder="Es. 2186829412250765">
+        <div class="aiuto">Account → Account pubblicitari. Solo i numeri.</div></div>
+    </div>
+    <div class="msg info" style="margin:16px 0 0">{{ ig() }}<div><small style="margin:0">Instagram non va inserito: si usa quello collegato alla pagina Facebook.</small></div></div>
+  </div>
+
+  <div class="card">
+    <div class="sez-titolo">{{ ic('pin') }}<h2>Zona e budget predefiniti</h2></div>
+    <p class="muted piccolo" style="margin:4px 0 12px">Vengono proposti quando crei una campagna (puoi sempre cambiarli).</p>
+    {% with zona = client %}{% include "_mappa.html" %}{% endwith %}
+    <div class="griglia">
+      <div><label for="daily_budget_eur">Budget al giorno</label><div class="campo-euro"><input type="text" inputmode="decimal" id="daily_budget_eur" name="daily_budget_eur" value="{{ client.get('daily_budget_eur', '') }}" required placeholder="15"></div></div>
+      <div><label for="age_min">Età minima del pubblico</label><input type="text" inputmode="numeric" id="age_min" name="age_min" value="{{ client.get('age_min', 25) }}"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="sez-titolo">{{ ic('info') }}<h2>Obbligo europeo (DSA)</h2></div>
+    <p class="muted piccolo" style="margin:4px 0 0">Per le inserzioni in Europa Meta chiede chi ne beneficia e chi le paga. Di solito è la ragione sociale del cliente.</p>
+    <div class="griglia">
+      <div><label for="dsa_beneficiary">Chi beneficia delle inserzioni</label><input type="text" id="dsa_beneficiary" name="dsa_beneficiary" value="{{ client.get('dsa_beneficiary', '') }}" placeholder="Es. Rossi Immobiliare Srl"></div>
+      <div><label for="dsa_payor">Chi le paga <span class="aiuto">(se diverso)</span></label><input type="text" id="dsa_payor" name="dsa_payor" value="{{ client.get('dsa_payor', '') }}" placeholder="Uguale al beneficiario"></div>
+    </div>
+  </div>
+
+  <details class="card" {{ 'open' if client.get('primary_text') and not key }}>
+    <summary><div class="sez-titolo" style="margin:0">{{ ic('edit') }}<h2 style="margin:0;flex:1">Testi e video predefiniti</h2><span class="tag">facoltativo</span></div></summary>
+    <label for="primary_text">Testo principale dell'inserzione</label>
+    <textarea id="primary_text" name="primary_text">{{ client.get('primary_text', '') }}</textarea>
+    <label for="headline">Titolo</label>
+    <input type="text" id="headline" name="headline" value="{{ client.get('headline', '') }}">
+    <label for="video_url">Link al video</label>
+    <input type="url" id="video_url" name="video_url" value="{{ client.get('video_url', '') }}" placeholder="https://…/video.mp4">
+  </details>
+
+  <div class="azioni" style="justify-content:space-between">
+    <div style="display:flex;gap:10px"><button type="submit" class="grande">{{ ic('check') }} Salva cliente</button><a class="btn sec grande" href="{{ url_for('clients') }}">Annulla</a></div>
+    {% if key %}<button type="submit" form="elimina" class="rosso">{{ ic('trash') }} Elimina</button>{% endif %}
   </div>
 </form>
 {% if key %}
-<form method="post" action="{{ url_for('client_delete', key=key) }}" onsubmit="return confirm('Eliminare questo cliente dalla lista? (Non tocca nulla su Meta)')">
-  <button class="rosso">Elimina cliente</button>
-</form>
+<form method="post" id="elimina" action="{{ url_for('client_delete', key=key) }}" onsubmit="return confirm('Eliminare questo cliente dalla lista? Su Meta non viene toccato nulla.')"></form>
 {% endif %}
 {% endblock %}

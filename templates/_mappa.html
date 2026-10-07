@@ -1,0 +1,62 @@
+{# Mappa per scegliere centro e raggio. Richiede Leaflet nel <head> e la variabile `zona` (lat, lng, radius_km). #}
+{% from "_macros.html" import ic %}
+<style>
+  #mappa { height: 320px; border-radius: 12px; border: 1px solid var(--bordo); margin-top: 12px; z-index: 0; }
+  .cerca { display: flex; gap: 8px; } .cerca input { flex: 1; }
+  .risultati { border: 1px solid var(--bordo); border-radius: 10px; margin-top: 6px; overflow: hidden; display: none; }
+  .risultati button { display: block; width: 100%; text-align: left; background: #fff; color: var(--testo); border: 0; border-top: 1px solid var(--bordo); border-radius: 0; font-weight: 400; padding: 10px 12px; font-size: 14px; }
+  .risultati button:first-child { border-top: 0; } .risultati button:hover { background: var(--bg); }
+  .raggio { display: flex; align-items: center; gap: 14px; margin-top: 14px; }
+  .raggio input[type=range] { flex: 1; accent-color: var(--blu); }
+  .raggio b { min-width: 64px; text-align: right; font-size: 17px; }
+</style>
+    <div class="cerca"><input type="text" id="cerca" placeholder="Es. Via del Corso, Roma"><button type="button" class="sec" id="cerca-btn">{{ ic('search') }} Cerca</button></div>
+    <div class="risultati" id="risultati"></div>
+    <div id="mappa"></div>
+    <div class="raggio">{{ ic('target') }}<span class="muted">Raggio</span><input type="range" id="raggio" min="1" max="80" step="1" value="{{ (zona.radius_km or 10)|int }}"><b id="raggio-txt"></b></div>
+    <input type="hidden" name="lat" id="lat" value="{{ zona.lat }}"><input type="hidden" name="lng" id="lng" value="{{ zona.lng }}">
+    <input type="hidden" name="radius_km" id="radius_km" value="{{ zona.radius_km }}">
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+const $ = function (id) { return document.getElementById(id); };
+// Mappa
+const lat0 = parseFloat($("lat").value) || 41.9028, lng0 = parseFloat($("lng").value) || 12.4964;
+const mappa = L.map("mappa", {scrollWheelZoom: false}).setView([lat0, lng0], 11);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 18, attribution: "© OpenStreetMap"}).addTo(mappa);
+const pin = L.marker([lat0, lng0], {draggable: true}).addTo(mappa);
+const cerchio = L.circle([lat0, lng0], {radius: 1000, color: "#0866FF", weight: 2, fillOpacity: .12}).addTo(mappa);
+function sposta(lat, lng, centra) {
+  pin.setLatLng([lat, lng]); cerchio.setLatLng([lat, lng]);
+  $("lat").value = lat.toFixed(6); $("lng").value = lng.toFixed(6);
+  if (centra) mappa.fitBounds(cerchio.getBounds(), {padding: [20, 20]});
+}
+function raggio() {
+  const km = parseInt($("raggio").value, 10);
+  $("raggio-txt").textContent = km + " km"; $("radius_km").value = km; cerchio.setRadius(km * 1000);
+}
+$("raggio").addEventListener("input", raggio);
+$("raggio").addEventListener("change", function () { mappa.fitBounds(cerchio.getBounds(), {padding: [20, 20]}); });
+mappa.on("click", function (e) { sposta(e.latlng.lat, e.latlng.lng, false); });
+pin.on("dragend", function () { const p = pin.getLatLng(); sposta(p.lat, p.lng, false); });
+raggio(); sposta(lat0, lng0, true);
+
+// Ricerca indirizzo (OpenStreetMap)
+async function cerca() {
+  const q = $("cerca").value.trim(); if (!q) return;
+  const box = $("risultati"); box.style.display = "block"; box.innerHTML = '<div class="muted piccolo" style="padding:10px 12px">Cerco…</div>';
+  try {
+    const r = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=it&accept-language=it&q=" + encodeURIComponent(q));
+    const res = await r.json();
+    box.innerHTML = res.length ? "" : '<div class="muted piccolo" style="padding:10px 12px">Nessun risultato, prova a scrivere diversamente.</div>';
+    res.forEach(function (x) {
+      const b = document.createElement("button"); b.type = "button"; b.textContent = x.display_name;
+      b.onclick = function () { sposta(parseFloat(x.lat), parseFloat(x.lon), true); box.style.display = "none"; $("cerca").value = x.display_name.split(",").slice(0, 2).join(","); };
+      box.appendChild(b);
+    });
+  } catch (e) { box.innerHTML = '<div class="muted piccolo" style="padding:10px 12px">Ricerca non disponibile: clicca direttamente sulla mappa.</div>'; }
+}
+$("cerca-btn").addEventListener("click", cerca);
+$("cerca").addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); cerca(); } });
+
+});
+</script>
