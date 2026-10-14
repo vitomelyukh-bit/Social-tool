@@ -27,6 +27,7 @@ from flask import (Flask, abort, flash, jsonify, redirect, render_template,  # n
 import meta_ads  # noqa: E402,I100  (carica .env prima di store e blob)
 import blob  # noqa: E402
 import store  # noqa: E402
+import video  # noqa: E402
 from meta_ads import MetaError  # noqa: E402
 
 ON_VERCEL = bool(os.environ.get("VERCEL"))
@@ -46,6 +47,7 @@ app.secret_key = os.environ.get("SECRET_KEY") or hashlib.sha256(
     f"meta-tool|{APP_PASSWORD}|{os.environ.get('META_TOKEN', '')}".encode()).hexdigest()
 app.config.update(SESSION_COOKIE_SAMESITE="Lax", SESSION_COOKIE_HTTPONLY=True,
                   SESSION_COOKIE_SECURE=ON_VERCEL, PERMANENT_SESSION_LIFETIME=timedelta(days=30))
+app.register_blueprint(video.bp)
 
 CLIENT_FIELDS = [
     # (chiave, etichetta, tipo, obbligatorio, aiuto)
@@ -123,6 +125,8 @@ def template_globals():
 @app.before_request
 def require_login():
     if request.endpoint in ("login", "cron_tick", "static", "privacy", "data_deletion"):
+        return None
+    if (request.endpoint or "").startswith("video.api_"):  # i Mac entrano con WORKER_TOKEN
         return None
     if not APP_PASSWORD:
         if ON_VERCEL:  # online senza password = chiunque col link userebbe il token
@@ -315,11 +319,15 @@ def format_dt(ts):
     return f"{giorno}, {d.strftime('%H:%M')}"
 
 
+def meta_clients():
+    return {k: c for k, c in meta_ads.load_clients().items() if c.get("ad_account_id") or c.get("page_id")}
+
+
 @app.route("/")
 def home():
     upcoming = [q for q in schedule_view(load_schedule()) if q["can_cancel"]]
     upcoming.sort(key=lambda q: q["when"])
-    return render_template("home.html", clients=meta_ads.load_clients(), upcoming=upcoming[:5],
+    return render_template("home.html", clients=meta_clients(), upcoming=upcoming[:5],
                            has_token=bool(os.environ.get("META_TOKEN")))
 
 
@@ -388,7 +396,7 @@ def client_delete(key):
 
 @app.route("/report")
 def report():
-    all_clients = meta_ads.load_clients()
+    all_clients = meta_clients()
     period = request.args.get("periodo", "last_30d")
     since = request.args.get("dal", "")
     until = request.args.get("al", "")
@@ -430,7 +438,7 @@ def report():
 
 @app.route("/campagna", methods=["GET", "POST"])
 def campaign():
-    all_clients = meta_ads.load_clients()
+    all_clients = meta_clients()
     key = request.values.get("cliente") or next(iter(all_clients), None)
     c = all_clients.get(key, {})
     form = {
@@ -558,7 +566,7 @@ def parse_local_dt(value):
 
 @app.route("/pubblica", methods=["GET", "POST"])
 def publish():
-    all_clients = meta_ads.load_clients()
+    all_clients = meta_clients()
     key = request.values.get("cliente") or next(iter(all_clients), None)
     form = {"message": "", "media_url": "", "kind": "image", "when": "", "fb": "1", "ig": "1"}
     errors = []
