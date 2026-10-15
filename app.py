@@ -75,6 +75,17 @@ PERIODS = [
 ]
 JOB_TTL = 3 * 86400
 
+# Titolare del trattamento, mostrato nelle pagine pubbliche /privacy e /eliminazione-dati
+# (richieste da Meta per la revisione dell'app). Dati pubblici dell'azienda, non segreti.
+OWNER = {
+    "name": None,       # ragione sociale
+    "address": None,    # sede legale, con paese
+    "vat": None,        # partita IVA
+    "email": None,      # contatto per privacy e richieste di cancellazione
+    "dpo_email": None,  # email del DPO (se non nominato: stessa del titolare)
+}
+LEGAL_UPDATED = "15/10/2026"
+
 
 @app.template_filter("eur")
 def fmt_money(v):
@@ -111,7 +122,7 @@ def template_globals():
 
 @app.before_request
 def require_login():
-    if request.endpoint in ("login", "cron_tick", "static"):
+    if request.endpoint in ("login", "cron_tick", "static", "privacy", "data_deletion"):
         return None
     if not APP_PASSWORD:
         if ON_VERCEL:  # online senza password = chiunque col link userebbe il token
@@ -138,6 +149,17 @@ def login():
         time.sleep(1)
         error = {"message": "Password errata.", "detail": ""}
     return render_template("login.html", error=error, hide_nav=True)
+
+
+@app.route("/privacy")
+def privacy():
+    return render_template("privacy.html", hide_nav=True, owner=OWNER, updated=LEGAL_UPDATED)
+
+
+@app.route("/eliminazione-dati")
+@app.route("/data-deletion")
+def data_deletion():
+    return render_template("data_deletion.html", hide_nav=True, owner=OWNER, updated=LEGAL_UPDATED)
 
 
 @app.route("/logout")

@@ -1,0 +1,29 @@
+{# Pagine pubbliche (privacy, eliminazione dati): stile da documento, senza menu #}
+{% macro v(x) %}{% if x %}{{ x }}{% else %}<mark>da completare</mark>{% endif %}{% endmacro %}
+{% macro css() %}
+  main { padding: 40px 20px 60px; }
+  .doc { max-width: 760px; margin: 0 auto; }
+  .doc .top { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
+  .doc .top img { width: 44px; height: 44px; border-radius: 11px; }
+  .doc .top strong { font-size: 18px; }
+  .doc h1 { margin-bottom: 4px; }
+  .doc h2 { font-size: 18px; margin: 28px 0 8px; }
+  .doc p, .doc li { color: #2b3342; line-height: 1.6; }
+  .doc ul { padding-left: 20px; }
+  .doc .lang { display: flex; gap: 8px; margin: 14px 0 6px; font-size: 14px; }
+  .doc hr { border: 0; border-top: 1px solid var(--bordo); margin: 40px 0; }
+  .doc mark { background: var(--rosso-bg); color: var(--rosso); padding: 0 4px; border-radius: 4px; }
+  .doc .card { margin-top: 12px; }
+{% endmacro %}
+{% macro owner_block(o) %}
+<div class="card">
+  <strong>{{ v(o.name) }}</strong><br>
+  {{ v(o.address) }}<br>
+  P. IVA / VAT: {{ v(o.vat) }}<br>
+  Email: {% if o.email %}<a href="mailto:{{ o.email }}">{{ o.email }}</a>{% else %}{{ v(none) }}{% endif %}<br>
+  DPO: {% if o.dpo_email %}<a href="mailto:{{ o.dpo_email }}">{{ o.dpo_email }}</a>{% else %}{{ v(none) }}{% endif %}
+</div>
+{% endmacro %}
+{% macro head() %}
+<div class="top"><img src="{{ url_for('static', filename='icon-1024.png') }}" alt=""><strong>Social Tool</strong></div>
+{% endmacro %}

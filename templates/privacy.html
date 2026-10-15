@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% import "_legal.html" as L %}
+{% block title %}Informativa privacy · Social Tool{% endblock %}
+{% block css %}{{ L.css() }}{% endblock %}
+{% block content %}
+<article class="doc">
+  {{ L.head() }}
+  <h1>Informativa sulla privacy</h1>
+  <p class="sottotitolo">Ultimo aggiornamento: {{ updated }}</p>
+  <div class="lang"><a href="#it">Italiano</a> · <a href="#en">English</a></div>
+
+  <section id="it">
+  <h2>Chi siamo</h2>
+  <p>Social Tool è uno strumento interno che usiamo per gestire le Pagine Facebook, gli account Instagram e le campagne pubblicitarie dei nostri clienti, che ce ne hanno dato accesso tramite Meta Business Manager. Non è un servizio aperto al pubblico: vi accedono solo i nostri collaboratori, con password. Titolare del trattamento:</p>
+  {{ L.owner_block(owner) }}
+
+  <h2>Quali dati trattiamo</h2>
+  <ul>
+    <li><strong>Dati delle attività dei clienti su Meta</strong>: ID e nome delle Pagine Facebook, ID e nome utente degli account Instagram professionali, ID degli account pubblicitari.</li>
+    <li><strong>Contenuti che pubblichiamo per i clienti</strong>: testi, immagini e video dei post e delle inserzioni, con data di pubblicazione o programmazione.</li>
+    <li><strong>Statistiche delle campagne</strong>: dati aggregati forniti da Meta (spesa, impression, clic, numero di contatti). Non riguardano singole persone.</li>
+    <li><strong>Impostazioni delle campagne</strong>: zona geografica, età minima, budget, sito e informativa privacy del cliente.</li>
+  </ul>
+  <p>Non accediamo ai profili personali degli utenti di Facebook o Instagram, non leggiamo messaggi né commenti e non scarichiamo i contatti raccolti dai moduli delle inserzioni: restano nell'account Meta del cliente.</p>
+
+  <h2>Perché li trattiamo</h2>
+  <p>Solo per svolgere il servizio che i clienti ci affidano: pubblicare e programmare post, creare e misurare le loro campagne pubblicitarie. La base giuridica è il contratto con il cliente (art. 6.1.b GDPR). Non vendiamo dati, non li usiamo per altri scopi e non li condividiamo con terzi diversi da quelli indicati sotto.</p>
+
+  <h2>Dove sono conservati e per quanto</h2>
+  <ul>
+    <li>Configurazione dei clienti: finché il cliente resta attivo; la eliminiamo quando il rapporto termina o su richiesta.</li>
+    <li>Post programmati: fino alla pubblicazione o all'annullamento.</li>
+    <li>File caricati per la pubblicazione: cancellati automaticamente dopo 48 ore (o dopo la pubblicazione, se programmata più avanti).</li>
+    <li>Registro delle operazioni: cancellato automaticamente dopo 3 giorni.</li>
+  </ul>
+  <p>Fornitori che ci aiutano a far funzionare lo strumento: Meta Platforms (Graph API e Marketing API), Vercel Inc. (hosting e archiviazione dei file), Upstash Inc. (database). Alcuni possono trattare dati fuori dall'UE, con le garanzie previste dal GDPR (clausole contrattuali standard o EU-US Data Privacy Framework).</p>
+
+  <h2>I tuoi diritti</h2>
+  <p>Puoi chiedere accesso, rettifica, cancellazione, limitazione, portabilità od opporti al trattamento scrivendo all'email indicata sopra. Puoi anche presentare reclamo al Garante per la protezione dei dati personali (garanteprivacy.it). Per cancellare i dati segui le <a href="{{ url_for('data_deletion') }}">istruzioni per l'eliminazione dei dati</a>.</p>
+  </section>
+
+  <hr>
+
+  <section id="en">
+  <h1>Privacy Policy</h1>
+  <p class="sottotitolo">Last updated: {{ updated }}</p>
+  <h2>Who we are</h2>
+  <p>Social Tool is an internal tool we use to manage the Facebook Pages, Instagram professional accounts and ad campaigns of our clients, who granted us access through Meta Business Manager. It is not open to the public: only our staff can sign in, with a password. Data controller: see the details above.</p>
+  <h2>Data we process</h2>
+  <ul>
+    <li>Client business assets on Meta: Page IDs and names, Instagram professional account IDs and usernames, ad account IDs.</li>
+    <li>Content we publish for clients: text, images and videos of posts and ads, with publishing or scheduling time.</li>
+    <li>Campaign statistics: aggregated metrics from Meta (spend, impressions, clicks, number of leads), never about individual people.</li>
+    <li>Campaign settings: location, minimum age, budget, client website and privacy policy.</li>
+  </ul>
+  <p>We do not access personal profiles of Facebook or Instagram users, we do not read messages or comments, and we do not download leads collected by lead ad forms: they stay in the client's Meta account.</p>
+  <h2>Why</h2>
+  <p>Only to provide the service our clients ask for: publishing and scheduling posts, creating and measuring their ad campaigns (legal basis: contract, Art. 6(1)(b) GDPR). We never sell data or use it for other purposes.</p>
+  <h2>Storage and retention</h2>
+  <p>Client settings are kept while the client is active; scheduled posts until published or cancelled; uploaded files are deleted automatically after 48 hours; operation logs after 3 days. Processors: Meta Platforms, Vercel Inc., Upstash Inc. Transfers outside the EU rely on Standard Contractual Clauses or the EU-US Data Privacy Framework.</p>
+  <h2>Your rights</h2>
+  <p>You can request access, rectification, erasure, restriction, portability or object to processing by writing to the email above, and lodge a complaint with your data protection authority. See the <a href="{{ url_for('data_deletion') }}">data deletion instructions</a>.</p>
+  </section>
+</article>
+{% endblock %}

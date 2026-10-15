@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% import "_legal.html" as L %}
+{% block title %}Eliminazione dei dati · Social Tool{% endblock %}
+{% block css %}{{ L.css() }}{% endblock %}
+{% block content %}
+<article class="doc">
+  {{ L.head() }}
+  <h1>Eliminazione dei dati</h1>
+  <p class="sottotitolo">Ultimo aggiornamento: {{ updated }}</p>
+  <div class="lang"><a href="#it">Italiano</a> · <a href="#en">English</a></div>
+
+  <section id="it">
+  <p>Social Tool non usa il Login con Facebook e non raccoglie dati personali degli utenti di Facebook o Instagram. Conserva solo i dati delle Pagine, degli account Instagram professionali e degli account pubblicitari dei clienti che ci hanno dato accesso (vedi l'<a href="{{ url_for('privacy') }}">informativa sulla privacy</a>).</p>
+  <h2>Come chiedere la cancellazione</h2>
+  <ol>
+    <li>Scrivi a {% if owner.email %}<a href="mailto:{{ owner.email }}?subject=Eliminazione%20dati%20Social%20Tool">{{ owner.email }}</a>{% else %}{{ L.v(none) }}{% endif %} con oggetto "Eliminazione dati Social Tool".</li>
+    <li>Indica il nome della Pagina Facebook o dell'account Instagram (o l'ID dell'account pubblicitario) di cui vuoi cancellare i dati.</li>
+    <li>Entro 30 giorni eliminiamo la configurazione del cliente, i post programmati e i file caricati, e ti confermiamo l'avvenuta cancellazione via email.</li>
+  </ol>
+  <h2>Revocare l'accesso</h2>
+  <p>Puoi anche togliere in qualsiasi momento il nostro accesso alle tue risorse da Meta Business Suite: Impostazioni › Partner (o Utenti › Utenti di sistema) › rimuovi l'accesso. Da quel momento lo strumento non può più leggere né pubblicare nulla per tuo conto.</p>
+  <p>I post già pubblicati e le campagne restano nel tuo account Meta: puoi eliminarli da lì. I contatti raccolti dai moduli lead non passano mai dai nostri sistemi.</p>
+  {{ L.owner_block(owner) }}
+  </section>
+
+  <hr>
+
+  <section id="en">
+  <h1>Data deletion instructions</h1>
+  <p>Social Tool does not use Facebook Login and does not collect personal data of Facebook or Instagram users. It only stores data about the Pages, Instagram professional accounts and ad accounts of clients who granted us access.</p>
+  <ol>
+    <li>Email {% if owner.email %}<a href="mailto:{{ owner.email }}?subject=Social%20Tool%20data%20deletion">{{ owner.email }}</a>{% else %}{{ L.v(none) }}{% endif %} with the subject "Social Tool data deletion".</li>
+    <li>Tell us the Facebook Page, Instagram account or ad account ID whose data should be deleted.</li>
+    <li>Within 30 days we delete the client settings, scheduled posts and uploaded files, and confirm by email.</li>
+  </ol>
+  <p>You can also revoke our access at any time in Meta Business Suite (Settings › Partners, or Users › System users). Published posts and campaigns remain in your Meta account, where you can delete them. Leads from lead forms never pass through our systems.</p>
+  </section>
+</article>
+{% endblock %}
