@@ -46,6 +46,7 @@
             <div class="muted piccolo">{% if v.configured %}{{ v.brand.fonts.captions }} · sottotitoli {{ v.brand.captions.style }}{% else %}Brand video da impostare{% endif %}</div></div>
           <span class="tinta" style="background:{{ v.brand.colors.highlight if v.configured else '#fff' }}"></span>
         </a>
+        {% if v.configured %}<a class="muted piccolo" style="display:block;margin:-6px 0 8px 52px" href="{{ url_for('video.video_client_card', key=k) }}">Scarica scheda per Claude (.md)</a>{% endif %}
       {% else %}
         <div class="vuoto"><p>Nessun cliente.</p></div>
       {% endfor %}
@@ -57,8 +58,8 @@
         <input type="text" name="name" placeholder="Nome del cliente" required><button class="piccolo">{{ ic('plus') }} Crea</button>
       </form>
       <form method="post" enctype="multipart/form-data" action="{{ url_for('video.video_client_import') }}" style="margin-top:14px">
-        <label style="margin:0 0 6px">Importa impostazioni (.json)</label>
-        <div style="display:flex;gap:8px"><input type="file" name="file" accept=".json,application/json" required style="flex:1"><button class="sec piccolo">Importa</button></div>
+        <label style="margin:0 0 6px">Importa una scheda (.md) o impostazioni (.json)</label>
+        <div style="display:flex;gap:8px"><input type="file" name="file" accept=".md,.json,text/markdown,application/json" required style="flex:1"><button class="sec piccolo">Importa</button></div>
       </form>
     </div>
   </div>

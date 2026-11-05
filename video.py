@@ -25,6 +25,7 @@ from flask import (Blueprint, Response, abort, flash, jsonify, redirect, render_
 import blob
 import meta_ads
 import store
+import video_clienti
 
 bp = Blueprint("video", __name__)
 MAX_MSGS = 500
@@ -75,12 +76,18 @@ CONSEGNA (salva tutto nella cartella "consegna" del progetto, che ti viene indic
   leggibilità, copertina, fedeltà del messaggio. Scrivi in chat cosa hai verificato."""
 
 DEFAULT_BRAND = {
-    "handle": "", "settore": "",
+    "handle": "", "settore": "", "instagram": "", "tool": "",
     "colors": {"highlight": "#E9E6BA", "text": "#FFFFFF", "outline": "#000000", "box": "#0A0A0A"},
     "fonts": {"captions": "Montserrat ExtraBold", "titles": "Montserrat ExtraBold", "cta": "Montserrat ExtraBold"},
-    "captions": {"style": "karaoke", "uppercase": True, "effect": "contorno", "words": "1-3", "position": "centro-basso"},
+    "captions": {"style": "karaoke", "uppercase": True, "effect": "contorno", "words": "1-3", "position": "centro-basso",
+                 "size": "", "y": ""},
     "cta": "", "look": "", "logo": "", "notes": "",
+    "safezone": "", "audio": "", "retouch": "", "avoid": "", "reference": "",
 }
+
+# Campi di testo semplici del brand (form, campi nascosti, scheda)
+TEXT_FIELDS = ["handle", "settore", "instagram", "tool", "cta", "look", "notes",
+               "safezone", "audio", "retouch", "avoid", "reference"]
 
 # Stili già usati, da applicare con un clic a un cliente
 PRESETS = {
@@ -209,10 +216,75 @@ def brand_text(name, b):
     return "\n".join(lines)
 
 
+CAPTION_STYLES = {"karaoke": "karaoke (le lettere si riempiono seguendo la voce)", "parola": "parola evidenziata",
+                  "parola-chiave": "parole chiave colorate", "statico": "statici"}
+
+
+def client_card(key, c):
+    """Scheda di montaggio in Markdown: tutto quello che serve per montare un video del cliente."""
+    v = video_of(c)
+    b, cap = v["brand"], v["brand"]["captions"]
+    name = c.get("name", key)
+    out = [f"# Scheda montaggio video — {name}",
+           f"_Scaricata dal pannello Social Tool il {time.strftime('%d/%m/%Y')}._",
+           "",
+           "> **Per Claude:** questa scheda contiene brand, stile e regole di montaggio di questo cliente.",
+           "> Seguila alla lettera per ogni video del cliente. Se un'indicazione manca o è in conflitto",
+           "> con il girato, chiedi prima di inventare. Le regole generali dello studio sono in fondo.",
+           ""]
+
+    def sec(title, rows):
+        rows = [r for r in rows if r]
+        if rows:
+            out.extend([f"## {title}", *rows, ""])
+
+    sec("Il cliente", [
+        f"- **Nome:** {name}",
+        b.get("settore") and f"- **Settore:** {b['settore']}",
+        b.get("handle") and f"- **Profilo:** {b['handle']}",
+        b.get("instagram") and f"- **Instagram:** {b['instagram']}",
+        b.get("logo") and f"- **Logo:** {b['logo']}",
+        b.get("tool") and f"- **Dove si monta:** {b['tool']}",
+    ])
+    labels = {"highlight": "Evidenziazione / colore brand", "text": "Testo", "outline": "Contorno / ombra",
+              "box": "Box e riquadri"}
+    sec("Colori", [f"- **{labels.get(k, k)}:** `{val}`" for k, val in b["colors"].items() if val])
+    flab = {"captions": "Sottotitoli", "titles": "Titoli", "cta": "CTA"}
+    sec("Font", [f"- **{flab.get(k, k)}:** {val}" for k, val in b["fonts"].items() if val])
+    sec("Sottotitoli", [
+        f"- **Stile:** {CAPTION_STYLES.get(cap.get('style'), cap.get('style'))}",
+        f"- **Maiuscolo:** {'sì, tutto MAIUSCOLO' if cap.get('uppercase') else 'no, maiuscole normali'}",
+        f"- **Leggibilità:** {cap.get('effect')}",
+        cap.get("words") and f"- **Parole per volta:** {cap['words']}",
+        cap.get("size") and f"- **Dimensione:** {cap['size']}",
+        f"- **Posizione:** {cap.get('position')}" + (f" (y {cap['y']})" if cap.get("y") else ""),
+    ])
+    sec("Zone sicure e impaginazione", [b.get("safezone")])
+    sec("Call to action e chiusura", [b.get("cta")])
+    sec("Colore e look", [b.get("look")])
+    sec("Audio, musica ed effetti", [b.get("audio")])
+    sec("Ritocco del viso", [b.get("retouch")])
+    sec("Cose da NON fare", [b.get("avoid")])
+    sec("Come si monta per questo cliente", [v.get("style_prompt")])
+    sec("Riferimenti e cartelle", [b.get("reference")])
+    sec("Note", [b.get("notes")])
+    ps = sorted((p for p in projects().values() if p["client"] == key), key=lambda p: p.get("updated", 0), reverse=True)
+    sec("Ultimi video nel pannello",
+        [f"- {p['title']} — {p['status']} ({time.strftime('%d/%m/%Y', time.localtime(p.get('updated', 0)))})"
+         for p in ps[:15]])
+    out.extend(["---", "", "## Regole generali dello studio (valgono per tutti i clienti)", "",
+                settings()["editor_prompt"], "", "---", "",
+                "<details><summary>Dati per reimportare la scheda nel pannello</summary>", "",
+                "```json", json.dumps({"name": name, "key": key, "video": c.get("video", {}), "version": 1},
+                                      ensure_ascii=False, indent=2), "```", "", "</details>", ""])
+    return "\n".join(out)
+
+
 # --- Pagine ------------------------------------------------------------------
 
 @bp.route("/video")
 def video_home():
+    video_clienti.ensure_seed(meta_ads.load_clients, meta_ads.save_clients)
     clients = meta_ads.load_clients()
     ps = sorted(projects().values(), key=lambda p: p.get("updated", 0), reverse=True)
     for p in ps:
@@ -254,14 +326,14 @@ def video_client(key):
             flash(f"Applicato lo stile «{pr['label']}»: controlla e salva le modifiche.")
             return redirect(url_for("video.video_client", key=key, tab="brand"))
         brand = {
-            "handle": f.get("handle", "").strip(), "settore": f.get("settore", "").strip(),
+            **{k: f.get(k, "").strip() for k in TEXT_FIELDS},
             "colors": {k: f.get(f"color_{k}", "").strip() for k in ("highlight", "text", "outline", "box")},
             "fonts": {k: f.get(f"font_{k}", "").strip() for k in ("captions", "titles", "cta")},
             "captions": {"style": f.get("cap_style", "karaoke"), "uppercase": bool(f.get("cap_upper")),
                          "effect": f.get("cap_effect", "contorno"), "words": f.get("cap_words", "").strip(),
-                         "position": f.get("cap_position", "centro-basso")},
-            "cta": f.get("cta", "").strip(), "look": f.get("look", "").strip(),
-            "logo": f.get("logo", "").strip(), "notes": f.get("notes", "").strip(),
+                         "position": f.get("cap_position", "centro-basso"),
+                         "size": f.get("cap_size", "").strip(), "y": f.get("cap_y", "").strip()},
+            "logo": f.get("logo", "").strip(),
         }
         c["video"] = {"brand": brand, "style_prompt": f.get("style_prompt", "").strip()}
         if f.get("name", "").strip():
@@ -271,7 +343,8 @@ def video_client(key):
         return redirect(url_for("video.video_client", key=key, tab=f.get("tab", "brand")))
     ps = sorted((p for p in projects().values() if p["client"] == key), key=lambda p: p.get("updated", 0), reverse=True)
     return render_template("video_client.html", key=key, client=c, v=video_of(c), projects=ps, presets=PRESETS,
-                           tab=request.args.get("tab", "video"), base_prompt=settings()["editor_prompt"])
+                           tab=request.args.get("tab", "video"), base_prompt=settings()["editor_prompt"],
+                           text_fields=TEXT_FIELDS)
 
 
 @bp.route("/video/cliente/<key>/esporta")
@@ -282,14 +355,23 @@ def video_client_export(key):
                     headers={"Content-Disposition": f'attachment; filename="cliente-video-{key}.json"'})
 
 
+@bp.route("/video/cliente/<key>/scheda")
+def video_client_card(key):
+    c = meta_ads.load_clients().get(key) or abort(404)
+    return Response(client_card(key, c), mimetype="text/markdown; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="scheda-montaggio-{key}.md"'})
+
+
 @bp.route("/video/cliente/importa", methods=["POST"])
 def video_client_import():
     f = request.files.get("file")
     try:
-        data = json.load(f)
+        raw = f.read().decode("utf-8")
+        m = re.search(r"```json\s*(\{.*\})\s*```", raw, re.S)
+        data = json.loads(m.group(1) if m else raw)
         name, video = data["name"], data.get("video", {})
     except Exception:  # noqa: BLE001
-        flash("File non valido: serve un .json esportato da «Esporta impostazioni».")
+        flash("File non valido: serve una scheda .md o un .json scaricati da questo pannello.")
         return redirect(url_for("video.video_home"))
     clients = meta_ads.load_clients()
     key = data.get("key") or re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
