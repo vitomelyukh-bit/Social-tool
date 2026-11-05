@@ -8,7 +8,7 @@
   .cliente .top b { font-size: 16px; }
   .dati { display: grid; grid-template-columns: auto 1fr; gap: 6px 10px; font-size: 14px; align-items: center; }
   .dati .ic, .dati .logo { width: 17px; height: 17px; color: var(--grigio); }
-  .cliente .azioni { margin-top: auto; padding-top: 4px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .cliente .azioni { margin-top: auto; padding-top: 4px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
   .cliente .azioni .btn { padding: 8px 6px; }
 {% endblock %}
 {% block content %}
@@ -23,8 +23,7 @@
   {% for k, c in clients.items() %}
   <div class="card cliente">
     <div class="top">{{ avatar(c.name) }}<div style="flex:1;min-width:0"><b>{{ c.name }}</b><div class="muted piccolo">{{ c.website|replace('https://', '')|replace('http://', '') }}</div></div>
-      <a class="btn sec piccolo" href="{{ url_for('client_edit', key=k) if c.page_id or c.ad_account_id else url_for('video.video_client', key=k, tab='brand') }}" title="Modifica">{{ ic('edit') }}</a></div>
-    {% if c.page_id or c.ad_account_id %}
+      <a class="btn sec piccolo" href="{{ url_for('client_edit', key=k) }}" title="Modifica">{{ ic('edit') }}</a></div>
     <div class="dati">
       {{ fb() }}<span>Pagina <code>{{ c.page_id }}</code></span>
       {{ meta() }}<span>Account <code>{{ c.ad_account_id }}</code></span>
@@ -32,14 +31,10 @@
       {{ ic('wallet') }}<span>{{ c.daily_budget_eur|eur }} € al giorno</span>
     </div>
     {% if not c.get('dsa_beneficiary') %}<span class="tag giallo">{{ ic('alert') }} Scheda da completare</span>{% endif %}
-    {% else %}<span class="tag blu">{{ ic('file-video') }} Solo video</span>{% endif %}
     <div class="azioni">
-      {% if c.page_id or c.ad_account_id %}
       <a class="btn piccolo" href="{{ url_for('publish', cliente=k) }}">{{ ic('send') }} Post</a>
       <a class="btn sec piccolo" href="{{ url_for('campaign', cliente=k) }}">{{ ic('megaphone') }} Campagna</a>
       <a class="btn sec piccolo" href="{{ url_for('report', cliente=k) }}">{{ ic('chart') }} Risultati</a>
-      {% endif %}
-      <a class="btn sec piccolo" href="{{ url_for('video.video_client', key=k) }}">{{ ic('file-video') }} Video</a>
     </div>
   </div>
   {% endfor %}
